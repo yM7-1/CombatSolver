@@ -83,6 +83,7 @@
 
 | 样例 | 当前证据 | 状态 |
 | --- | --- | --- |
+| Q1+Q2 / A1+A2 签名线（能力卡方向 T1 缺口） | KNOWN-CONFIG-ROUTE-TRACE 双战斗验证（QUEEN/AEONGLASS start 根，beam135/270/512 一致）：签名线 T1 前缀在 step3（准备+弃2）后被层间排名截断——RawRank 1652/2527、BeamRank −2,430,003 对切线 +283,997（差 ~270 万）；step4-6 状态从未生成；完整线终态 −4,600,006 优于当时保留末位 → 中途截断而非终局劣势。三个既有保护机制均不覆盖家族内深度前缀：谱系代表（家族内同排名）、opening_channels（投斧遗物门控 `HasUnusedCardReplayAllocator`，39b5e22）、cross-turn 隐形收益租约（仅回合末语义分歧，Terminal.cs） | 修复=家族内深度分层席位设计（结构级）；待与上游作者评审。诊断工具 `KNOWN-CONFIG-ROUTE-TRACE-V0111`（6815a84）与池观测（7257a96）已提交可复用 |
 | `48f87b132f1846df9630927b336a4afd` | 报告31→0，增加一瓶LUCKY_TONIC；比较根 :21 cursor0→:23 cursor7。前缀LETHALITY、SLEIGHT_OF_FLESH、WISH及第二张LETHALITY。Preflight通过；SearchOnly恢复失败，首差异Y记录0/0/0与当前0/0/0/0，尚未搜索 | 旧格式恢复待核对，不计质量；不能只改权重或把药水收益全部归为能力优化 |
 | `0530d7283df648828b4e27e47f9e75d9` 删除全局门槛后 | `act3-boss-global-unlimited-0530`：玩家15HP/敌235/0药/8000，未获胜 | 门槛不是唯一问题，未记改善 |
 | `f25c4872be5945269e8a6d38a9ab1286` 删除全局门槛后 | `act3-boss-global-unlimited-f25c`：同 :5 根，continuation/native-state通过，22战损/0药/T13/11750总展开（含原补充工作） | 未达到报告4战损；旧当前基线20/24各有记录，不能用报告51直接宣布本轮减损29 |
