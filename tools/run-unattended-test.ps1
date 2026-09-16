@@ -247,6 +247,7 @@ param(
     [switch]$ExportBugReportAfterCombat,
     [ValidateSet(-1, 0, 1)]
     [int]$EnableDetailedDiagnosticLogsForTest = -1,
+    [string]$KnownRouteTraceConfigPath = "",
     [switch]$ManualEndTurnAfterInitialSearch,
     [switch]$SingleStepAfterInitialSearch,
     [ValidateSet("", "ExecuteCurrentTurn", "FullAuto")]
@@ -933,6 +934,7 @@ $request = [ordered]@{
     exportBugReportAfterSetup = $ExportBugReportAfterSetup.IsPresent
     exportBugReportAfterCombat = $ExportBugReportAfterCombat.IsPresent
     enableDetailedDiagnosticLogsForTest = if ($EnableDetailedDiagnosticLogsForTest -ge 0) { [bool]$EnableDetailedDiagnosticLogsForTest } else { $null }
+    knownRouteTraceConfigPath = if ([string]::IsNullOrWhiteSpace($KnownRouteTraceConfigPath)) { $null } else { (Get-HeadlessCanonicalPath $KnownRouteTraceConfigPath) }
     manualEndTurnAfterInitialSearch = $ManualEndTurnAfterInitialSearch.IsPresent
     singleStepAfterInitialSearch = $SingleStepAfterInitialSearch.IsPresent
     singleStepResumeModeForTest = if ([string]::IsNullOrWhiteSpace($SingleStepResumeModeForTest)) { $null } else { $SingleStepResumeModeForTest }

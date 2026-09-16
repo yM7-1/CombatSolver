@@ -41,6 +41,7 @@ internal sealed class UnattendedTestRequest
     public string CheckpointSelector { get; init; } = "latest";
     public string ReplayMode { get; init; } = "RestoreOnly";
     public string? ReplayPolicyOverridePath { get; init; }
+    public string? KnownRouteTraceConfigPath { get; init; }
     public string? EvidenceDirectory { get; init; }
     public bool PreserveNativeCombatStateForTest { get; init; }
     public int Ascension { get; init; }
