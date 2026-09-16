@@ -223,25 +223,65 @@ internal sealed partial class CombatBeamSolver
                 && root.HasUnusedCardReplayAllocator)
             {
                 int channelWidth = Math.Clamp(_profile.BeamWidth / 12, 6, 12);
-                List<List<SearchNode>> openingChannels = pool
-                    .Select(node => (Node: node, Opening: FindOpeningCardNode(node)))
-                    .Where(item => item.Opening?.Parent is { } parent
-                        && (item.Opening.Snapshot.PersistentBuffValue
-                                > parent.Snapshot.PersistentBuffValue
-                            || item.Opening.Snapshot.StrategicEffects.RetentionValue
-                                > parent.Snapshot.StrategicEffects.RetentionValue))
-                    .GroupBy(item => (
-                        item.Node.PotionCount,
-                        FirstCardId: item.Opening!.Action!.CardId))
-                    .OrderByDescending(group => group.Max(item =>
-                        item.Opening!.Snapshot.StrategicEffects.RetentionValue))
-                    .ThenByDescending(group => group.Max(item => item.Node.Score))
-                    .Take(8)
-                    .Select(group => Retention.RankBest(
-                        group.Select(item => item.Node),
-                        channelWidth,
-                        preserveDefensiveRoute: true))
-                    .ToList();
+                List<List<SearchNode>> openingChannels;
+                if (_detailedDiagnostics)
+                {
+                    var annotated = pool
+                        .Select(node => (Node: node, Opening: FindOpeningCardNode(node)))
+                        .Where(item => item.Opening?.Parent is { } openingParent)
+                        .Select(item => (
+                            item.Node,
+                            Opening: item.Opening!,
+                            Increases: item.Opening.Snapshot.PersistentBuffValue
+                                    > item.Opening.Parent!.Snapshot.PersistentBuffValue
+                                || item.Opening.Snapshot.StrategicEffects.RetentionValue
+                                    > item.Opening.Parent.Snapshot.StrategicEffects.RetentionValue))
+                        .GroupBy(item => (item.Node.PotionCount, FirstCardId: item.Opening.Action.CardId))
+                        .ToList();
+                    var selectedGroups = annotated
+                        .Where(group => group.Any(item => item.Increases))
+                        .ToList();
+                    List<List<SearchNode>> eligibleChannels = selectedGroups
+                        .OrderByDescending(group => group.Where(item => item.Increases)
+                            .Max(item => item.Opening!.Snapshot.StrategicEffects.RetentionValue))
+                        .ThenByDescending(group => group.Max(item => item.Node.Score))
+                        .Take(8)
+                        .Select(group => Retention.RankBest(
+                            group.Where(item => item.Increases).Select(item => item.Node),
+                            channelWidth,
+                            preserveDefensiveRoute: true))
+                        .ToList();
+                    policy.Diagnostics.Info(
+                        "[CombatSolver/Debug] OPENING_CHANNELS pool=" + pool.Count
+                        + " channels=" + eligibleChannels.Count
+                        + " width=" + channelWidth
+                        + " groups=" + string.Join(';', annotated.Select(group =>
+                            $"{group.Key.PotionCount}/{group.Key.FirstCardId}:{group.Count()}"
+                            + (group.Any(item => item.Increases) ? string.Empty : "(flat)"))));
+                    openingChannels = eligibleChannels;
+                }
+                else
+                {
+                    openingChannels = pool
+                        .Select(node => (Node: node, Opening: FindOpeningCardNode(node)))
+                        .Where(item => item.Opening?.Parent is { } parent
+                            && (item.Opening.Snapshot.PersistentBuffValue
+                                    > parent.Snapshot.PersistentBuffValue
+                                || item.Opening.Snapshot.StrategicEffects.RetentionValue
+                                    > parent.Snapshot.StrategicEffects.RetentionValue))
+                        .GroupBy(item => (
+                            item.Node.PotionCount,
+                            FirstCardId: item.Opening!.Action!.CardId))
+                        .OrderByDescending(group => group.Max(item =>
+                            item.Opening!.Snapshot.StrategicEffects.RetentionValue))
+                        .ThenByDescending(group => group.Max(item => item.Node.Score))
+                        .Take(8)
+                        .Select(group => Retention.RankBest(
+                            group.Select(item => item.Node),
+                            channelWidth,
+                            preserveDefensiveRoute: true))
+                        .ToList();
+                }
                 int expandedLimit = Math.Min(
                     pool.Count,
                     checked(selected.Count + Math.Max(12, _profile.BeamWidth / 3)));
