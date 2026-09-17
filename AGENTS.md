@@ -1,5 +1,7 @@
 # CombatSolver 仓库工作指令
 
+> **本轮追加（2026-09-17）：** 能力卡方向白天批次：T1 签名线截断修复三变体实测后撤回（QUEEN 34→22 可达但 AEONGLASS 稳定退化 +26/27，机制精确定位为「多卡选择 RoutingChoiceSignature 坍缩 + depth-4/5/6 连锁截断」，跨层机制留下一工作块）；T2 首批补值 RadiancePower（9379f1e）与 PlatingPower（998437d）走 StrategicEffectVector 保留通道（零退化已验证、materiality 未验证已声明）；持续收益盘点（8 候选+7 未模拟）与**验证方法学发现**（broad-12 套件 4 路并行重跑方差 ±8~33、小估值改动 Δ 小于噪声带不可归因、旧基线属 Mod 栈时代不可比）记录在 `docs/strategy/STRATEGY_OPTIMIZATION_LOG.md` 2026-09-17 节。本批不启动可见Steam、不提升版本、不发包。
+
 > **本轮追加（2026-09-15）：** 用户授权继续完成成本较低且有收益的复用，并更新正式PR #96。保留路线行按完整显示值/本地化身份复用，以及同帧语言往返通知修复；投影洗牌缓存经两场8份完整对照后撤回，追加提交不改变Search/Engine/Runtime。路线、语言、部署显示合同及两端门禁通过，记录见 `docs/performance/performance-pr-20260915.md` 的后续追加章节。本批不启动可见Steam、不提升版本、不发包或上传创意工坊。
 
 > **当前工作重点（2026-09-15）：** `perf/general-allocation-20260914` 已整合上游 `cd66b1d`（0.38.6）的搜索、药水、复活与录像改动，完成通用分配、生成池及选牌续执行三阶段优化，合并验证与当前上游三场完整ABBA均已通过，已提交正式 PR #96。早期对照使用各报告明确记录的基线，不把旧基线数字当作当前上游的收益。通用优化见 `docs/performance/general-allocation-20260914.md`，生成池与抽牌前缀见 `docs/performance/crab-latency-20260914.md`，三阶段实施见 `docs/performance/choice-continuation-expansion-implementation-20260914.md`。用户已授权推送任务分支并提交正式 PR；本批不另提升版本、不发包或上传创意工坊。正式发布规则继续由下文统一脚本管理，监控后台最新版提示由用户维护。

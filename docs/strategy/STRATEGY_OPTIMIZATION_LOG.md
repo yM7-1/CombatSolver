@@ -70,6 +70,27 @@
 | 2026-08-31 | `8695fa0ff6184117a737608f34157968` | 留一费导致少防御 | 21 | 8 | 8 | 13 | 0 | 否（追平） |
 | 2026-08-31 | `ee98a833f3194c3eb9649448a52f02e2` | 优化路线 | 27 | 17 | 17 | 10 | 0 | 否（追平） |
 
+## 2026-09-17：能力卡持续收益估值首批补值（RadiancePower/PlatingPower）
+
+两张持续收益能力走中间保路估值补值（`StrategicEffectVector` 保留通道，仿已验证的 OrbitPower/AutomationPower RecurringEnergyGain 同族机制，不进 Score/终局排序/状态键）：
+
+- **RadiancePower（9379f1e）**：辉光每回合返能按 `energy × min(层数, 剩余回合) × energyUnit` 计入 Resource 维度；此前落默认 Scaling(层数) 单点分。
+- **PlatingPower（998437d）**：石甲每回合末 +amount 甲按 `Prevention(amount × RemainingTurns)` 计入，复用共享 IncomingDamage 上限防威胁有限战斗双重计价；此前同样是单点分。
+
+**验证方法学发现（对后续所有小估值改动重要）**：
+1. broad-12 回归套件为 4 路并行搜索，同一 DLL 重跑同场景战损可差 ±8~33（QUEEN 随机样例 65/68/32），**套件 Δ 小于噪声带时不可归因**；
+2. 2026-09-16 深夜记录的回归基线属「Mod 栈时代」数字，与当前干净栈（仅 RitsuLib）不同环境，不可直接对比；
+3. 12 个回归场景 loadout 均不含 Radiance/StoneArmor，新增通道在套件上不活跃，配对验证只能证明零退化（无一致差异），不能证明估值收益；
+4. 专用固定根（RADIANT_TINCTURE×2 → DECIMILLIPEDE_ELITE 单线程、STONE_ARMOR+INFLAME → EliteOrBoss 单线程）两侧路线未发生变化（70/70、18/18）——固定根上路线未饮用/未按预期出牌时通道不生效，materiality 未验证，已在两份提交信息中如实声明。
+
+**本轮不宣称任何战损改善**；通道价值主张=机制对齐（与已验证同族一致的估值完整性），materiality 验证待设计「路线实际饮用辉光/打出石甲且能量或甲为瓶颈」的固定根。
+
+### 附：能力卡持续收益盘点（T2 盘点轮产出，2026-09-17）
+
+「已模拟但中间保路估值漏算」剩余候选：BarricadePower（格挡跨回合保存）、RitualPower（每回合+力，与 DemonForm 同构）、RegenPower（每回合回血）、InfiniteBlades/HelloWorld/SentryMode（每回合生成牌，CardAccess 维度）、MachineLearning/ToolsOfTheTrade/SpectrumShift/Aggression（每回合加抽）、TheBombPower（延迟引爆进 DelayedDamage 维度）、LoopPower/CoolantPower/FanOfKnivesPower（依赖球队列/命中数等新快照字段，工程量更大）。
+完全未模拟（连模拟都没有，非估值问题）：CoordinatePower、FadePower、HammerTimePower、HardToKillPower、LeadershipPower、OneForAllPower、TankPower（全库无引用 7 个）；CalcifyPower 已施加但 Engine 镜像无 handler（MethodNotMirrored 风险，PredictionCoverage 会报 PredictionGap）。
+WraithFormPower 估值方向性错误：默认 Scaling(amount) 把每回合 -敏代价当收益计，修正时需注意。
+
 ## 2026-09-02：通用循环与跨回合收益迭代（开发中）
 
 - 玩家反馈的核心不是某一套无限组合，而是 Beam 会过早丢弃“前几次动作评分低，隐藏相位或下一回合才产生数百伤害”的路线；同时，卖血和烧牌可能是必要启动成本。验收目标继续按真实质量排序：先减少整场生命/资源损失；损失相同才减少战斗回合，不能用更多战损换一个更短回合数后宣称更优。
