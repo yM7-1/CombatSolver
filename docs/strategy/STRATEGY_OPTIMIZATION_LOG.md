@@ -70,6 +70,13 @@
 | 2026-08-31 | `8695fa0ff6184117a737608f34157968` | 留一费导致少防御 | 21 | 8 | 8 | 13 | 0 | 否（追平） |
 | 2026-08-31 | `ee98a833f3194c3eb9649448a52f02e2` | 优化路线 | 27 | 17 | 17 | 10 | 0 | 否（追平） |
 
+## 2026-09-17 晚：估值通道扩展第三批（Barricade/Regen，缺口封顶纪律落实）
+
+- **BarricadePower（b3b0fc5）**：壁垒「格挡不清空」按 `Prevention(当前格挡 × min(剩余回合, 8))` 线性折算（刻意不按复利），共享入伤上限兜底；StrategicEffectContext 新增 PlayerBlock init 字段（单点 Build 调用点填充，签名不变）。配对 broad-12 全部逐位一致；专用根（壁垒+格挡牌 vs Boss，单线程）49/49——lane 未达排序门槛，materiality 待块缺场景。
+- **RegenPower（cb58a9f）**：再生按 `Prevention(amount × min(剩余回合, amount))`（层数递减天然有界）。配对 broad-12 仅 001 在噪声带内（92 vs 85），其余零差。materiality 根（RegenPotion×2 + RequireAtLeastOne 强制饮酒，单线程 Boss 根）：base/fix 均 20，通道活跃但未达门槛。
+- **materiality 现状**：Radiance（缺口封顶版）与 Regen 在专用根上通道确实活跃（饮酒后状态含能力、估值路径命中），但数值幅度未改变路线；Barricade/Plating 的专用根路线未命中被测能力。结论：通道机制与边界均正确且零退化，**是否带来战损改善仍未证实**，在作者认可前不宣称收益——这也支撑在 PR 里提出「希望作者提供跨 archetype 报告包用于泛化验证」的请求。
+- TheBomb/生成牌/加抽引擎候选继续排队（生成牌引擎涉及 ImmediateShivSupply 交互，工程量较大，单独批次）。
+
 ## 2026-09-17 傍晚：位移差分工具化与通道形态验证（T1 第三批）
 
 **诊断工具**：路径观察缓冲 16384→65536（21d766b，仅 trace 场景活跃），位移差分从此可完整导出。
