@@ -551,6 +551,7 @@ expected_beam_files=(
     CombatBeamSolver.Expansion.cs
     CombatBeamSolver.FinalPlanOrdering.cs
     CombatBeamSolver.Models.cs
+    CombatBeamSolver.NoveltySearch.cs
     CombatBeamSolver.Transpositions.cs
     CombatBeamSolver.OrderedMutationRetention.cs
     CombatBeamSolver.ParallelExpansion.cs
@@ -583,6 +584,16 @@ done <<'EOF'
 CombatBeamSolver.cs	internal sealed partial class CombatBeamSolver(
 GrowthPolicy.cs	internal readonly record struct GrowthValues(
 SearchPolicySnapshot.cs	public GrowthValues GrowthBudgets { get; init; }
+SearchPolicySnapshot.cs	public bool UseNoveltyPortfolio { get; init; }
+CombatBeamSolver.Models.cs	public NoveltySearchRun? Novelty;
+CombatBeamSolver.NoveltySearch.cs	private bool RunNoveltyOpen(
+CombatBeamSolver.NoveltySearch.cs	CaptureNoveltyFacts(SearchNode node)
+CombatSearchCoordinator.NoveltyPortfolio.cs	NoveltyPortfolioBudget.Remaining(profile,
+CombatSearchCoordinator.NoveltyPortfolio.cs	IsBetterPotionPolicyResult(root, policy, exploration, baseline)
+BfwsPackedNovelty.cs	Dictionary<BfwsFact, int> _atoms
+BfwsPackedNovelty.cs	_parentPartition == partition
+BfwsBoundedOpen.cs	private readonly SortedSet<Entry> _entries
+NoveltyPortfolioBudget.cs	profile.MaxExpandedNodes - (int)expandedNodes
 CombatBeamSolver.cs	private readonly SearchRunContext _run = new(
 CombatBeamSolver.cs	private BeamRetentionPolicy Retention =>
 CombatBeamSolver.cs	private FinalPlanOrdering FinalOrdering =>
@@ -851,11 +862,11 @@ while IFS=$'\t' read -r relative_path text; do
     require_fixed "$repository_root/$relative_path" "$text" 'missing unattended protocol boundary'
 done <<'EOF'
 src/Testing/UnattendedTestRunner.cs	private static readonly ProtocolHost Host = new();
-src/Testing/UnattendedTestRunner.ProtocolHost.cs	private sealed class ProtocolHost
+src/Testing/UnattendedTestRunner.ProtocolHost.cs	private sealed partial class ProtocolHost
 src/Testing/UnattendedTestRunner.ProtocolHost.cs	private async Task RunRequestLoopAsync(NGame host)
 src/Testing/UnattendedTestRunner.ProtocolHost.cs	private void Activate(UnattendedTestRequest request)
 src/Testing/UnattendedTestRunner.ProtocolHost.cs	private void Reset()
-src/Testing/UnattendedTestRunner.Writer.cs	private sealed class Writer(
+src/Testing/UnattendedTestRunner.Writer.cs	private sealed partial class Writer(
 src/Testing/UnattendedTestRunner.Writer.cs	public RuntimeMemorySnapshot Write(
 src/Testing/UnattendedTestRunner.Writer.cs	private static void WriteResult(UnattendedTestResult result, UnattendedTestRequest request)
 src/Testing/UnattendedTestRunner.ScenarioBuilder.cs	private sealed partial class ScenarioBuilder(

@@ -1,5 +1,54 @@
 # CombatSolver 测试清单
 
+## 0.40.2：多策略路线搜索默认关闭与大战损引导（2026-09-17）
+
+- 设置与 UI 合同已更新：新安装默认关闭多策略路线搜索；245→246 迁移只推进版本，完整保留玩家已有的开启／关闭状态与永久隐藏横幅选择。多宽度路线精炼仍默认开启且没有独立横幅。
+- 两条玩家引导统一以预计损失至少 8 HP 为「大战损」门槛：7 HP 及以下不显示，8 HP 起显示。多策略横幅还要求功能关闭，点击可永久隐藏；主动开启功能同样不再提示。
+- `NOVELTY-PORTFOLIO-SETTINGS` / `e53b50614756461481b31d5902f5f01b` Passed，22.47 秒：验证新安装默认关闭、246 迁移分别保留玩家已有的开启和关闭状态、设置往返、性能页控件、请求冻结，以及多策略与性能预设两条引导共同采用 7／8 HP 边界。
+- `UI-LOCALIZATION` / `484adb3b62f34561b54ef4a4609dbde0` Passed，25.67 秒：eng/zhs/zht 共 426 项目录，「大战损」引导中英文文本、功能关闭/开启、7／8 HP 边界、点击永久隐藏与 SpeedX 引导合同通过。Release 编译 0 警告、0 错误；PowerShell 结构门禁 `search_files=114` 通过；未启动可见 Steam。
+
+## 0.40.2：请求级搜索进度（2026-09-17）
+
+- 控制器 UI 合同已更新：同一请求从主搜索切到后续搜索时，即使当前子搜索节点数重置，进度仍按 10 秒请求预算从 5% 推进到 6%；累计世界线与候选路线展示保持原口径。合同另断言超过软时间预算后仍固定显示 95%，避免排空与最终复核被显示为已经完成。
+- 本轮只执行 Release 编译与结构门禁；按用户要求未运行无人战斗或可见 Steam 测试，以上合同改动已编译但未在游戏进程中执行。
+
+## 0.40.2：变形池根快照缓存（2026-09-17）
+
+- `TRANSFORMATION-POOL-CACHE` / `c8c552fc5f52400b849c1a77a77fefce` Passed，23.89 秒：断言缓存序列与上游 `GetUnlockedCards` 逐实例同序、跨 `Fork` 不可变共享、可变池被拒绝、外来约束被拒绝、外来池被拒绝、规范无色池（Quest/Event/Ancient/Token 回退）被正确服务且同序、缓存路径与原生路径产出同一张牌且 `CombatCardSelection` 五字段 RNG 状态与完整预测延续状态一致、父模拟与实机根未被改动（`comparisons=4`）。使用隔离无头实例并在完成后退出，未启动可见 Steam。
+- 该契约初版在 `Transformation pool accepted a changed pool or constraint.` 失败。排查为**契约自身错误**：它断言无色池必须被拒绝，但无色池是合法回退池、本就应被服务；实现无缺陷。已改为具名的正/负断言并复跑通过。不把这次失败记作实现缺陷，也不把修正前的运行记作通过。
+- 等价性：`tools/OfflineSearchHarness/compare_results.py` 对基线 `41f9478` 与候选产物逐字段比较，**7 个根全部一致**：crab@2000 170 字段、KAISER_CRAB_BOSS@6000 242、silent-discard@6000 192、QUEEN_BOSS@6000 152、THE_KIN_BOSS@6000 174、KNOWLEDGE_DEMON_BOSS@6000 212、THE_INSATIABLE_BOSS@6000 234，全部 `mismatched_roots=0`、无 `left_only`/`right_only`，覆盖 `solverMetrics`（排除时间/内存/GC）、`route` 每个动作、根 `ContinuationStamp` 与 `catalogFingerprint`。
+- 固定工作量 A/B：同根、`VeryHigh`、beam 48、`--dop 1`、顺序 ABBA。KAISER_CRAB_BOSS @2000 节点 18.78 秒 → 9.07 秒（2.072 倍）。**压力场景**（沿用 crab 生成场景规格只换遭遇与幕索引，预算标定到基线 ≥20 秒）：KNOWLEDGE_DEMON_BOSS 54.11→14.76 秒（3.667 倍）、THE_KIN_BOSS 41.78→14.43 秒（2.895 倍）、KAISER_CRAB_BOSS 37.32→14.86 秒（2.511 倍）、THE_INSATIABLE_BOSS 23.63→10.79 秒（2.191 倍）；**基线 >20 秒的 4 个根加速比 2.191–3.667 倍**。不走变形路径的提前穷尽根为 1.041 倍（silent-discard）、1.426 倍（QUEEN_BOSS）；**对照组**把同批 Boss 遭遇改用默认薄牌组后三者全部提前穷尽、加速比 0.984 / 1.015 / 0.990 倍（收益为零，略低于 1.0 属 1–3 秒量级噪声，不记作退化）。Release 构建 0 警告、0 错误。
+- 内存：每节点总分配 2.06 MB → 1.04 MB；但峰值工作集约 385 MB → 约 405 MB、峰值托管堆约 157 MB → 约 179 MB，**未改善**。峰值成因未取证，不作为通过项。
+- **并行度 8** 复测（12000 节点、同根、顺序 ABBA）：厚牌组 2.583 / 2.398 / 2.178 / 1.865 / 1.696 倍（KAISER_CRAB_BOSS / KNOWLEDGE_DEMON_BOSS / THE_KIN_BOSS / QUEEN_BOSS / THE_INSATIABLE_BOSS），薄牌组对照组 1.000 / 0.989 / 0.983 倍。并行度不改变结论。
+- **DOP 8 的字段级等价性不可用**：`compare_results.py` 报 `DIFFERENT`，但差异仅 `roundReplayPrefixCaptures` / `executionChoiceReuses` 两个调度计数器，`route` / `rootState` / `catalog` 全为 0 处；且**基线自比**在 DOP 8 下同样在这一个计数器上不同（A1 vs A2 7808 vs 7794），证明是并行调度非确定性而非语义差异。不把 DOP 8 的 `DIFFERENT` 记作实现缺陷，也不把它记作通过；字段级等价性以 DOP 1 的 7 根全一致为准。
+- 结构门禁：Bash `tools/verify-refactor-boundaries.sh` 通过，`REFACTOR_BOUNDARIES_OK search_files=114`、退出码 0（增量 1 即本次新增的 `src/Search/RootCombatTransformationPoolSnapshot.cs`）。Release 构建 0 警告、0 错误。
+- 未执行：可见 Steam 性能未测，上述倍数只是无头数据，不外推为实机收益。详见[性能报告](performance/transform-pool-root-snapshot-20260917.md)。
+
+## 0.40.1：多策略回合准备选牌修复（2026-09-16）
+
+- 夸克打包结构合同通过：只用现有 `CombatSolver-0.40.0.zip` 调用独立打包函数，临时产物为 15,728,765 字节，保留 5 个 CombatSolver 根条目并仅新增一个 13,663,763 字节的无压缩 `QUARK_UPLOAD_PADDING.bin`；RitsuLib 条目与嵌套 ZIP 均为 0，文件严格超过 15 MiB。未执行上传、网盘移动或正式发布。
+- 日志站基线：0.40.0 共取得 12 份 `TurnSetupFailure` 问题包，覆盖烤手套、能力牌及多个职业/遭遇；12 份异常栈均进入 `RunNoveltyPortfolioPass -> CombatBeamSolver.RunNoveltyOpen`。11 份在 `BuildContinuations -> Replay` 因未回放准备选牌而找不到首张手牌，1 份由终结准备根进入 `Expand`。服务端筛选结果是玩家主动提交的问题包，不作为总体发生率统计。
+- `NOVELTY-TURN-SETUP-CHOICE-0400` / `26117906a7a4464c83cc1a9a10ac803f` Passed：显式强制多策略路线搜索、固定 5 秒预算、DOP2，真实烤手套准备选牌被路线保留；最终搜索 1,578 个节点、10,669 次转移，3 回合零战损获胜，没有准备阶段失败。Release 构建 0 警告、0 错误。
+- 两个全新无头实例在建局时停在原生 `There's another modal already open`，均到 120 秒后由启动器停止，未进入搜索且不计为回归失败或通过；改用此前已完成初始化的隔离实例后，同一请求正常通过。
+
+```powershell
+pwsh -NoProfile -File tools\run-unattended-test.ps1 -ScenarioId NOVELTY-TURN-SETUP-CHOICE-0400 -CharacterId IRONCLAD -EncounterId FUZZY_WURM_CRAWLER_WEAK -Seed NOVELTY-TURN-SETUP-CHOICE-0400 -RelicsJson '[{"relicId":"TOASTY_MITTENS","addWithoutObtainedEffects":true}]' -FixedSearchBudget -SearchBudgetOverrideMilliseconds 5000 -SearchMaxDegreeOfParallelismForTest 2 -UseNoveltyPortfolioForTest -PerformancePresetForTest Low -ExpectedInitialSetupChoiceCountAtLeast 1 -ExpectedInitialSetupChoiceSourceId TOASTY_MITTENS -StopAfterInitialSetupAssertion -TimeoutSeconds 120 -ExitOnComplete
+```
+
+## 0.40.0：有界新颖性组合与设置迁移（2026-09-16）
+
+- 引导横幅回归：`UI-LOCALIZATION` / `56c829a25d294a95bed3959f98322c7f` Passed，eng/zhs/zht 共 426 项目录，验证多策略与皮皮极速横幅的当前语言文案、点击永久隐藏和设置往返；`NOVELTY-PORTFOLIO-SETTINGS` / `1bb50f409cd843e797a2b16669219da4` Passed，验证精炼默认开启、多策略默认关闭、旧设置缺失横幅字段时采用显示默认值、两类横幅关闭选择持久化及搜索请求冻结。Release 构建 0 警告、0 错误；两项均使用隔离无头实例并在完成后退出，未启动可见 Steam，因此不把无头结果写成真实排版验收。
+- 节点预算与强制精炼迁移后，离线预设合同通过：四档节点预算为 60,000 / 120,000 / 250,000 / 500,000，时间与 Beam 保持原值；自定义 1,000,001 节点的迁移断言已编译，迁移 243→244 强制开启精炼并保留 Custom、多策略、NoGC 与内存值，244 后再次关闭保持关闭。无胜利追加搜索原策略和 8 项请求合同通过，`BEAM_WIDTH_PORTFOLIO_OK checks=73`、PowerShell 结构门禁（`search_files=113`）及 Release 构建通过，构建 0 警告、0 错误。独占与并行无头模式各尝试一次 `NOVELTY-PORTFOLIO-SETTINGS`，均在 120 秒内未取得宿主资源，测试未启动且未停止现有实例，因此游戏内设置断言未记为通过。
+- 合并 PR #102/#103 后的本轮审计：修正次段成员误触发长期资源 `RankBest` 的作用域，并把多宽度路线精炼改为默认开启。`BEAM_WIDTH_PORTFOLIO_OK checks=73`、新颖性 21+6+12,000+7+9 项离线合同、PowerShell 结构门禁（`search_files=113`）和 Release 构建均通过，构建 0 警告、0 错误。`NOVELTY-PORTFOLIO-SETTINGS` 已更新默认值断言并成功编译；本轮执行时独占无头槽持续被其他实例占用，120 秒准入超时，测试未启动，未记为通过，也未停止现有实例。
+- 新增默认关闭的多策略开关，当前上游 `7f806de`、游戏 0.111.0、RitsuLib 0.6.2。14 个固定根的 28 份完整 Smart 请求全部运行成功，两边均 12 个完整胜利；其中 3 根投影战损下降，其他根战损相同。每份样本独立进程、交替 AB/BA，核对五份输入/原生开局 JSON，使用请求 `total_*` 指标。具体成本、反例与未完成胜利见[报告](strategy/bounded-novelty-search-20260916.md)。
+- 离线合同：21 项参考调度 + 6 项祖先配额 + 7 项有界队列 + 9 项共享预算；12,000 个混合状态与参考新颖性完全一致。两个原生结构门禁均通过，`search_files=113`；最终 Release 11.48 秒、0 警告/错误。
+- `GENERATED-NOVELTY-SEARCH` 加 `control-checks.flag` / `2d59455a85d34d82b28540efe4b4a12b` Passed：实际 DOP2 接管当前回合、逐动作接管已显示路线、取消向外传播、工作只计一次及 live/shadow 根不变。
+- `UI-LOCALIZATION` / `49c873258c7f4a32a68311311f5078a7` Passed，eng/zhs/zht、424 项目录；`NOVELTY-PORTFOLIO-SETTINGS` / `60e2e21739604b578dbaa6c2e197a9d5` Passed，默认关闭、持久化、性能页控件与请求冻结。
+- `NOVELTY-HP-TARGET-STOP` / `07da6f2abdd0486f947f02fe1e4c922a` Passed：真实前置探索、目标战损、固定重放成长、致命成长、强制一药/保留备用药及至少一药；`ROUTE-CACHE-RECORD-V0111` / `0f890408d5784ecca93e939f84f079ae` Passed，新增策略隔离缓存身份并保留恢复/手动重算语义。
+- 综合 `CONTROLLER-SESSIONS-527` / `51d1ea6438c646bca26081bc9f5c9a89` 在窗口缩放/尺寸持久化断言失败（`configured=True, persistence=False`），尚未到新增设置断言。完整综合场景未通过，新增设置改用上述独立同源合同验证；不把失败归因为新搜索或记成通过。
+- 双组合开关 / `1bb9e9c368824ce892b3efef1bef228b` Passed：30秒请求中实际运行3个Beam宽度，探索加全部Beam成员11,443节点≤24,000主搜索上限；上游药水审计仍按每层节点预算及请求截止时间执行。
+- 原生两端 ScenarioId 参数通用；[复跑方式](../tools/BfwsResearchChecks/README.md) 同时说明 PowerShell/Bash 协议与 Linux 独立进程包装器。5 个新根的 10 份对照完整获胜且终局策略摘要相同，但多数成本更高；另有两个场景8份独立ABBA。三场原生部署与首次预测的战损/药水一致且计划外重算0，包含DOP2与真实1GB NoGC预算4次回收续搜；runId和全部代价见报告。没有可见 Steam、FPS 或 Windows 实机性能结论。
+
 ## 录像回放临时费用与充能球恢复（2026-09-15，未发布）
 
 - 亡灵契约师/女王原包修复前 `71f63f33ad1d4e65bb52e66ba1cc50e8` 在严格导入时失败：手牌第 8 张 `SPUR` 记录为带 `EndOfTurn, WhenPlayed` 清除时机的 0 费，导入后为基础 1 费。修复后同一原包 `SHOWCASE-BUNDLE-IMPORT-V0111` / `d65e84b66d3f40319cc9495822aaa7f0` Passed，23.78 秒；8 张模型手牌与界面节点一致，牌堆计数一致，录像路线接纳且本地搜索 0 次。
@@ -22,6 +71,23 @@
 - RitsuLib 0.6.0 失败基线 `UI-LOCALIZATION` / `1a41b720610146afb894f3c9a25c5c18` 在 120 秒上限退出；日志直接定位为旧 `RitsuBaseLibTargetTypeLookupPatch` 找不到已经被框架改写的 `Assembly -> Type` 私有闭包，CombatSolver 初始化在应用自身补丁前中断。删除重复适配后，同一完整 0.6.0 分包启动并运行 `UI-LOCALIZATION` / `8d5c7bcdac8d438396cc12fb4d3459a4` Passed，28.53 秒，eng/zhs/zht 与 420 项目录通过。
 - `NATIVE-HAND-CHOICE-REPLAY` / `fd5b50d371c041129e4c0e82d266a858` Passed，29.82 秒：RitsuLib 0.6.0 下两组燃烧契约选择、失配后人工恢复保持；新增生存者在 `Instant` 模式打出、选择防御弃牌、退出原生手牌选择并完成动作的直接合同。
 - `BEAM-PORTFOLIO-SETTINGS-0387` / `0064d9a37309472db95ba9c1fd7fe353` Passed，29.35 秒：开关默认关闭，设置往返、性能页控件与搜索请求冻结一致；首回合原生部署完成。组合器与门控离线检查 `BEAM_WIDTH_PORTFOLIO_OK checks=59`，Windows PowerShell 结构门禁通过（`search_files=105`）。没有运行 Bash 门禁或可见 Steam 测试。
+
+## 多宽度路线精炼扩展成员类型（2026-09-16，未发布）
+
+- 组合器与门控离线检查 `python3 tools/BeamWidthPortfolioChecks/run.py`：`BEAM_WIDTH_PORTFOLIO_OK checks=73`，新增默认成员含且仅含一个次段成员和一个基础分成员、基线成员是普通宽度成员、两种成员的 Profile 各只多一个标志、显式宽度列表不追加、`MoveLeadingBandToTail` 四种情形。Bash 结构门禁 `REFACTOR_BOUNDARIES_OK search_files=105`，Release 构建 0 警告、0 错误。
+- 一致性：本分支 DLL 在两个标志都未置位时，与 0.39.0 main（`7f806de`）的 DLL 在同一离线宿主、同一 5 根生成场景（Very High、固定节点预算、DOP 1）上 61 项 `solverMetrics`、全部动作与根戳记逐字段相同。
+- 开关对照：同一 DLL、120 根生成场景每 4 根取 1 的 30 根，基线（两个标志都关）与次段开、基础分开各跑一次。次段作为组合成员：Very High 净 +51 HP 当量（变好 5、变差 0，1 根死转活），Medium 净 +21（4 / 1，1 根死转活）。基础分作为组合成员：Very High 净 +41（4 / 0，1 根死转活），Medium 净 +86（9 / 0，1 根死转活）。次段两组与基础分 Medium 组 30 根全部有效；基础分 Very High 组有一根（IRONCLAD-ELITE-04）撞 600 秒时间保险，该根在基线下同样撞保险。
+- 本轮只运行离线宿主与离线检查，没有可见 Steam、Windows 无人测试或生产路径计时。
+
+## 离线搜索宿主（2026-09-16，未发布）
+
+- macOS Release 构建：`CombatSolver.csproj` 与 `tools/OfflineSearchHarness/OfflineSearchHarness.csproj` 均 0 警告、0 错误。
+- Bash 结构门禁 `REFACTOR_BOUNDARIES_OK search_files=105`；Beam 宽度组合离线检查 `BEAM_WIDTH_PORTFOLIO_OK checks=59`。两条 `partial` 边界声明已同步到 `.sh` 与 `.ps1`。
+- 新宿主对旧研究版宿主逐字段一致（同一份 0.39.0 DLL、同一批生成场景请求、`VeryHigh`/beam 135/nodes 100000/分支 72-42-54、`--dop 1`、`--budget-ms 600000`、`searchMode=Evaluate`）：BASE5 五根比 466 个字段，30 根子集比 2719 个字段，全部相同，没有单边多出来的根。比较口径见 `tools/OfflineSearchHarness/compare_results.py`（`solverMetrics` 排除时间/内存/GC 字段、选中路线逐动作、根 `ContinuationStamp`、目录指纹）。
+- `--search-mode Coordinator --use-portfolio` 三根（`High` 预设、60 秒预算）全部 Passed，`solverMetrics.portfolioMembers` 各 3 个成员，宽度 `[90, 60, 135]`，即默认的 `[W, 2W/3, 3W/2]`；开关关闭时只有 1 个成员。
+- 本轮只在 macOS 上跑离线宿主与 Bash 门禁，没有启动游戏、没有跑无人测试、没有 Windows 验证。
+- 合并到当前主线后的 Windows 首次验证发现宿主工程缺少多版本 RitsuLib 的 `0.111.0` 引用目标，补齐后编译通过；首次运行随后发现解析器只查旧单目录，无法加载 `STS2-RitsuLib.Runtime`，已改为同时解析版本兼容目录与共享程序集目录。宿主原默认遭遇 `JAW_WORM` 在当前目录不存在，已改用项目现有的 `FUZZY_WURM_CRAWLER_WEAK`。最终运行结果记录在本次合并提交。
+- Windows 合并验证：CombatSolver Release 与 OfflineSearchHarness Release 均 0 警告、0 错误；PowerShell 结构门禁 `REFACTOR_BOUNDARIES_OK search_files=113`。离线宿主默认场景最小烟测通过，推进到玩家第一回合并完成 Evaluate 搜索：182 展开、507 转移、预计战损 4，未启动 Godot 或可见 Steam。
 
 ## 路线界面复用与派生计算实验（2026-09-15，未发布）
 

@@ -19,6 +19,9 @@ internal sealed record SearchPolicySnapshot(
     SearchFramePressureSignal FramePressureSignal,
     SearchMemoryPressureSignal MemoryPressureSignal)
 {
+    public bool UseNoveltyPortfolio { get; init; }
+    public NoveltySearchOptions? NoveltySearch { get; init; }
+    public NoveltyPortfolioBudget NoveltyBudget { get; init; } = NoveltyPortfolioBudget.Default;
     public bool Act3BossStrategy { get; init; }
     internal static bool IsAct3BossEncounter(int actIndex, string? encounterId)
         => actIndex == 2 && encounterId is "TEST_SUBJECT_BOSS" or "AEONGLASS_BOSS" or "QUEEN_BOSS";
@@ -55,14 +58,14 @@ internal sealed record SearchPolicySnapshot(
     public bool EffectiveHasGrowthTargets => !IgnoreLongTermRewards && HasGrowthTargets;
 
     /// <summary>
-    /// 主搜索改用 <see cref="BeamWidthPortfolio" />：若干个只有 Beam 宽度不同的成员共享同一份节点预算，
-    /// 按既有比较规则取最优。默认关闭，关闭时生产行为逐位不变。
+    /// 主搜索改用 <see cref="BeamWidthPortfolio" />：若干个宽度或中途排序不同的成员共享同一份节点预算，
+    /// 按既有比较规则取最优。默认开启；关闭时只运行基线成员。
     /// </summary>
     public bool UseBeamWidthPortfolio { get; init; }
 
     /// <summary>
-    /// 组合成员宽度。首项由 <see cref="BeamWidthPortfolio.ProductionWidths" /> 强制成基线宽度；
-    /// 为空时用默认的 [基线, 基线×2/3, 基线×3/2]。
+    /// 组合成员宽度。首项由 <see cref="BeamWidthPortfolio.ProductionMembers" /> 强制成基线宽度；
+    /// 为空时用默认的 [基线, 基线×2/3, 基线×3/2, 次段 基线, 基础分 基线]，显式给出时只有宽度成员。
     /// </summary>
     public IReadOnlyList<int>? BeamWidthPortfolioWidths { get; init; }
 

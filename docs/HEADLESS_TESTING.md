@@ -5,11 +5,13 @@
 
 这是测试基础设施，不是单场搜索多核优化，也不支持多可见游戏窗口。游戏内请求仍串行，由各进程的 ProtocolHost 处理；不同实例才能并行。
 
+只想批量量搜索指标（宽度、预算、保留规则的对照）而不需要无人测试的断言时，用[离线搜索宿主](OFFLINE_SEARCH_HARNESS.md)：它不启动 Godot，几十根可以在一台机器上连着跑。行为改动的正确性验收仍然走本文这套流程。
+
 ## 用法
 
 回收生命周期的最小独立验证可用 `dotnet run --project tools/CombatSolver.GcPolicyChecks/CombatSolver.GcPolicyChecks.csproj -c Release -- checkpoint`，不启动 Godot；该模式链接生产 GC 政策，建立真实 NoGC 区域并验证续用与收集中取消。它不替代完整游戏里的延迟手动请求及引用释放 epoch 合同。
 
-固定小预算搜索使用 `-FixedSearchBudget -SearchBudgetOverrideMilliseconds 1500`，Bash 对应 `--fixed-search-budget --search-budget-override-milliseconds 1500`。生产只有一套搜索配置；旧 ForceShortSearchOnly 和短/深预算输入仅作为兼容入口，不能据此断言阶段。旧 ExpectedInitialSearchPhase/DeepSearchTriggered/DeepSearchImprovedResult 参数已删除，改断言总工作量、边界和实际路线。新回放政策覆盖文件使用 `profile` / `fixedBudget`；旧归档的 `deepProfile` 仍可读取。
+固定小预算搜索使用 `-FixedSearchBudget -SearchBudgetOverrideMilliseconds 1500`，Bash 对应 `--fixed-search-budget --search-budget-override-milliseconds 1500`。需要在不改玩家设置的情况下覆盖多策略路线搜索时，使用 `-UseNoveltyPortfolioForTest` / `--use-novelty-portfolio-for-test`；该开关只存在于无人测试协议，结束请求时由 `ProtocolHost` 重置。生产只有一套搜索配置；旧 ForceShortSearchOnly 和短/深预算输入仅作为兼容入口，不能据此断言阶段。旧 ExpectedInitialSearchPhase/DeepSearchTriggered/DeepSearchImprovedResult 参数已删除，改断言总工作量、边界和实际路线。新回放政策覆盖文件使用 `profile` / `fixedBudget`；旧归档的 `deepProfile` 仍可读取。
 
 先在各任务自己的 worktree 构建，禁止两个 agent 同时构建同一 worktree：
 

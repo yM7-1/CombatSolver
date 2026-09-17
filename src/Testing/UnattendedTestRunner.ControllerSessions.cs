@@ -11,6 +11,47 @@ namespace CombatSolver;
 
 internal sealed partial class UnattendedTestRunner
 {
+    private void AssertSearchPortfolioSettings(CombatState combat)
+    {
+        if (!new SolverSettingsData().UseBeamWidthPortfolio)
+            throw new InvalidOperationException("多宽度路线精炼必须默认开启。");
+        if (new SolverSettingsData().UseNoveltyPortfolio)
+            throw new InvalidOperationException("多策略搜索必须默认关闭。");
+        if (!new SolverSettingsData().ShowNoveltyPortfolioHint
+            || !new SolverSettingsData().ShowSpeedXWarning)
+        {
+            throw new InvalidOperationException("多策略与皮皮极速引导横幅必须默认允许显示。");
+        }
+        SolverSettingsData dismissedHints = SolverSettings.RoundTripForTesting(
+            new SolverSettingsData()
+            {
+                ShowNoveltyPortfolioHint = false,
+                ShowSpeedXWarning = false,
+            });
+        if (dismissedHints.ShowNoveltyPortfolioHint || dismissedHints.ShowSpeedXWarning)
+            throw new InvalidOperationException("引导横幅的不再提示选择没有持久化。");
+        SolverOverlay.ShowManualCalculationReady(NGame.Instance!, false);
+        if (!SolverOverlay.ExercisePerformancePresetPersistenceForTesting())
+            throw new InvalidOperationException("0.24.3 性能迁移或预设/内存独立持久化失败。");
+        if (!SolverOverlay.ExercisePerformanceHintForTesting())
+            throw new InvalidOperationException("大战损性能提示没有遵守 8 HP 触发阈值。");
+        SolverSettingsSnapshot portfolioSettings = SolverSettings.Capture();
+        SearchPolicySnapshot portfolioEnabled = SolverController.CaptureSearchPolicy(
+            portfolioSettings with { UseBeamWidthPortfolio = true, UseNoveltyPortfolio = true },
+            combat,
+            includeTurnSetup: false,
+            theftPolicy: null);
+        SearchPolicySnapshot portfolioDisabled = SolverController.CaptureSearchPolicy(
+            portfolioSettings with { UseBeamWidthPortfolio = false, UseNoveltyPortfolio = false },
+            combat,
+            includeTurnSetup: false,
+            theftPolicy: null);
+        if (!portfolioEnabled.UseBeamWidthPortfolio || portfolioDisabled.UseBeamWidthPortfolio
+            || !portfolioEnabled.UseNoveltyPortfolio || portfolioDisabled.UseNoveltyPortfolio)
+            throw new InvalidOperationException("组合搜索设置没有按搜索请求冻结。");
+        _completedChecks.Add("SearchPortfolios:RefinementDefaultOn:NoveltyDefaultOff:DamageGuidanceThreshold8:SettingsRoundTrip:UiControl:PolicySnapshot");
+    }
+
     private async Task AssertControllerSessionLifecycleAsync(CombatState combat)
     {
         CombatBeamSolver.VerifyCycleTranspositionLeasePolicyForTesting();
@@ -166,7 +207,8 @@ internal sealed partial class UnattendedTestRunner
                 FrontierNodes: 0,
                 EndedNodes: 0,
                 ElapsedMilliseconds: 500,
-                Phase: "test"),
+                Phase: "test",
+                RequestBudgetMilliseconds: 10_000),
             deployWhenReady: false,
             reviewedWorldlinesBeforeSearch: 5);
         if (SolverOverlay.SearchSummaryTextForTesting != "已查阅 42 条世界线")
@@ -195,11 +237,13 @@ internal sealed partial class UnattendedTestRunner
                     CombatEndedTurn: null,
                     EnemyHp: 1,
                     Score: 0d),
-                SpeculativeRoutePreview: progressPreview),
+                SpeculativeRoutePreview: progressPreview,
+                RequestBudgetMilliseconds: 10_000),
             deployWhenReady: false,
             reviewedWorldlinesBeforeSearch: 5,
             bestSnapshot: SolverOverlaySnapshot.CaptureSpeculativeRoute(progressPreview));
-        if (SolverOverlay.SearchProgressRatioForTesting < progressRatio
+        if (Math.Abs(progressRatio - 0.05d) > 0.0001d
+            || Math.Abs(SolverOverlay.SearchProgressRatioForTesting - 0.06d) > 0.0001d
             || SolverOverlay.ReviewSummaryTextForTesting?.Contains(
                 "正在搜索无药路线",
                 StringComparison.Ordinal) != true
@@ -210,8 +254,26 @@ internal sealed partial class UnattendedTestRunner
                 "预计战损 未知",
                 StringComparison.Ordinal) != true)
         {
-            throw new InvalidOperationException("药水补查开始后搜索进度条倒退。");
+            throw new InvalidOperationException("搜索进度条没有按整次请求的时间预算平稳推进。");
         }
+        SolverOverlay.ShowProgress(
+            new SolverProgress(
+                progressTurn,
+                progressTurn,
+                CompletedTurnLayers: 0,
+                PlayDepth: 0,
+                ExpandedNodes: 100,
+                ReviewedWorldlines: 100,
+                MaxNodes: 100,
+                FrontierNodes: 0,
+                EndedNodes: 0,
+                ElapsedMilliseconds: 15_000,
+                Phase: "复核最终候选",
+                RequestBudgetMilliseconds: 10_000),
+            deployWhenReady: false,
+            reviewedWorldlinesBeforeSearch: 5);
+        if (Math.Abs(SolverOverlay.SearchProgressRatioForTesting - 0.95d) > 0.0001d)
+            throw new InvalidOperationException("运行中的搜索进度条没有为收尾工作保留余量。");
         if (SolverController.IsSearching
             && (SolverOverlay.StopSearchButtonTextForTesting != "停止计算"
                 || SolverOverlay.StopSearchButtonDisabledForTesting))
@@ -374,7 +436,8 @@ internal sealed partial class UnattendedTestRunner
         SolverSettingsData notificationDefaults = new();
         if (SolverSettings.ResolvePerformancePreset(notificationDefaults)
                 != SolverPerformancePreset.Medium
-            || notificationDefaults.UseBeamWidthPortfolio
+            || !notificationDefaults.UseBeamWidthPortfolio
+            || notificationDefaults.UseNoveltyPortfolio
             || !notificationDefaults.EnableNoGcRegion
             || notificationDefaults.NoGcRegionBudgetGigabytes
                 != SolverSettings.DefaultNoGcRegionBudgetGigabytes)
@@ -433,22 +496,7 @@ internal sealed partial class UnattendedTestRunner
         }
         if (!SolverOverlay.ExerciseUploadCompletionTransitionForTesting())
             throw new InvalidOperationException("上传任务结束前按钮状态提前切回空闲，可能重新打开确认弹窗。");
-        if (!SolverOverlay.ExercisePerformancePresetPersistenceForTesting())
-            throw new InvalidOperationException("0.24.3 性能迁移或预设/内存独立持久化失败。");
-        SolverSettingsSnapshot portfolioSettings = SolverSettings.Capture();
-        SearchPolicySnapshot portfolioEnabled = SolverController.CaptureSearchPolicy(
-            portfolioSettings with { UseBeamWidthPortfolio = true },
-            combat,
-            includeTurnSetup: false,
-            theftPolicy: null);
-        SearchPolicySnapshot portfolioDisabled = SolverController.CaptureSearchPolicy(
-            portfolioSettings with { UseBeamWidthPortfolio = false },
-            combat,
-            includeTurnSetup: false,
-            theftPolicy: null);
-        if (!portfolioEnabled.UseBeamWidthPortfolio || portfolioDisabled.UseBeamWidthPortfolio)
-            throw new InvalidOperationException("多宽度路线精炼设置没有按搜索请求冻结。");
-        _completedChecks.Add("BeamWidthPortfolio:SettingsRoundTrip:UiControl:PolicySnapshot");
+        AssertSearchPortfolioSettings(combat);
         AssertDefaultSearchParallelism();
         string parallelFailure = SolverController.FormatSearchFailureForTesting(
             new InvalidOperationException("parallel failure"),

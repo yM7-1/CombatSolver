@@ -135,7 +135,7 @@ RitsuLib 0.6.0 自身拥有 BaseLib 目标类型的外部登记查询、按程�
 `SearchPolicySnapshot.CanStopAtHpTarget` 统一默认开启的战损目标早停与实际成长目标。主线程冻结 `GrowthOpportunityTargets`，额度本身不代表持有对应牌；目标向量和不可证明原因进入路线缓存与问题包。Phases 在已准入候选提交时检查完整胜利、全部有界成长目标、遗物、偷窃和强制用药要求，命中后排空当前父节点/并行批次，释放后续工作并从达标候选收尾；Coordinator 在补充搜索结果边界沿用同一开关与阈值。“不考虑局外收益”从统一入口移除成长目标。
 `GrowthCostPolicy` 管理至亮之焰单场累计最大生命消耗的准入；成本属于 SimulatedCombatState 的独立分支值，从主线程原生出牌历史捕获，经 Fork 复制并进入指纹/续用文本。`ResolveRoundChoiceBranches` 与 `ResolveTurnSetupChoices` 在产出候选前统一拒绝超额分支，实际模拟仍执行原有效果。禁忌魔典的收益计数在已有 CardPowerOnPlaySupport 中记入 GrowthValues，允许额度由成长策略设置决定。
 
-`CombatSearchCoordinator.FailureRecovery` 在请求级完成主搜索与药水审计后，管理无完整胜利的有限追加搜索。它扩大搜索配置、保留请求剩余时间并比较已有质量；交接结果优先返回，每轮内存观测独立起算。四档内置节点预算由 `SolverSettings` / `SolverSearchProfile` 声明，Custom 保留显式设置。
+`CombatSearchCoordinator.FailureRecovery` 在请求级完成主搜索与药水审计后，管理无完整胜利的有限追加搜索。它扩大搜索配置、保留请求剩余时间并比较已有质量；交接结果优先返回，每轮内存观测独立起算。四档内置节点预算由 `SolverSettings` / `SolverSearchProfile` 声明，依次为 60,000 / 120,000 / 250,000 / 500,000；Custom 保留显式设置，节点预算只要求至少 100，不设额外配置上限。设置迁移 244 只强制旧配置开启多宽度路线精炼，不重置性能与其他开关。
 
 根创建时，`PredictionModPatchAudit` 在 Prediction 层检查已有卡牌 OnPlay 的第三方 Harmony 补丁；每根按类型去重并读取当前补丁表。`AdaptedCardOnPlayMirrors` 只为完整精确组合提供标准 registry 镜像，选择表归 `PredictionModHookSubscriberCapture`，随 `SimulatedCombatState` Fork 共享。OnPlay facade 命中后直接返回，禁止再执行 vanilla/spec。Runtime 的 live continuation 读取当前配置，预测 continuation 和指纹只读根标记；既有采用／续用／部署检查拒绝配置失配。worker 不得读取 Harmony 表。启用登记后，根未审计的新卡牌类型明确失败；其他方法和未登记状态机不在完整审计范围。接口见[OnPlay 补丁适配](third-party-onplay-patches.md)。
 
@@ -156,7 +156,7 @@ RitsuLib 0.6.0 自身拥有 BaseLib 目标类型的外部登记查询、按程�
 
 `ActionRelicTriggerRecorder` 仅存在于最终路线回放，附带 Damage/Heal 的来源、请求/修正数值和 HP 前后值；普通 Beam 分支保持 null，不分配取证列表。直接字段赋值等绕过 Damage/Heal 的变更尚无来源事件，不能把这份记录宣称为所有语义写点的完整追踪。
 
-`BeamWidthPortfolio.cs` 是一个与 Beam 算法无关的组合器：按顺序在同一个根上跑若干只有 Beam 宽度不同的成员，共享一份节点预算（首个成员拿全额，其后各成员的上限是扣掉前面实际展开数后的余量，扣光即停），撞节点上限又没到终局的成员不参与比较，其余按调用方传入的既有比较规则整条取最优，同分保留先出现的基线成员。它不含比较规则、不改保留逻辑、状态键、评分或常量；展开数、转移数和终止原因都由调用方按各自既有口径给出。`SolverSettings.UseBeamWidthPortfolio` 默认关闭，由 Runtime 冻结进 `SearchPolicySnapshot`；关闭时主搜索行为逐位不变。做法与数据来源见[宽度组合](strategy/beam-width-portfolio.md)。
+`BeamWidthPortfolio.cs` 是一个与 Beam 算法无关的组合器：按顺序在同一个根上跑若干宽度或中途排序不同的成员，共享一份节点预算（首个成员拿全额，其后各成员的上限是扣掉前面实际展开数后的余量，扣光即停），撞节点上限又没到终局的成员不参与比较，其余按调用方传入的既有比较规则整条取最优，同分保留先出现的基线成员。它不含比较规则、状态键或终局排序；展开数、转移数和终止原因都由调用方按各自既有口径给出。`SolverSettings.UseBeamWidthPortfolio` 默认开启，由 Runtime 冻结进 `SearchPolicySnapshot`；关闭时只运行基线成员。做法与数据来源见[宽度组合](strategy/beam-width-portfolio.md)。
 
 `BeamWidthPortfolioGate.cs` 是精炼成员的准入判断，只做算术与比较，不看搜索状态：基线必须已经把自己这一宽度搜干净（`BoundaryReason == None`）、不是已证明最优的零战损胜利、耗时不超过时间预算的四分之一，且共享节点余量、剩余时间、`SearchMemoryPressureSignal.RemainingBytes` 都装得下「基线实测 × 成员宽度 ÷ 基线宽度 × 3/2」的估算，才启动下一位成员；否则该成员不运行、不花预算，只留一行原因。成员顺序执行不并行，精炼成员的软时间预算收紧到本轮剩余部分。`BeamWidthPortfolioTelemetry.cs` 是请求级诊断，记首条路线发布时刻、逐成员开销与各成员结束后的托管堆峰值，挂在 `SolverResult.PortfolioTelemetry` 上供测试写出；组合关闭时同样记录，那时是单成员一行。基线成员一完成就走协调器已有的 interim 回调发布给界面（中途路线本来就由 `SolverProgress` 承载），精炼不影响玩家看到第一条路线的时刻。Search 仍然不读设置：开关与成员宽度由运行时写进 `SearchPolicySnapshot`。
 
@@ -169,6 +169,18 @@ RitsuLib 0.6.0 自身拥有 BaseLib 目标类型的外部登记查询、按程�
 Smart 层间使用 `SmartLayerMemoryForecast` 的同窗分配和转移高水位估算下一层容量；预测超出余量、样本不完整或区域丢失时回收并重建 NoGC。回收仍遵循原有药水层准入及停止条件。
 
 普通 Beam 保持原有评分、动作数、`OffensiveProgressValue` 初始排序及必保候选构造。在必保候选置换之后、药水配额处理之前，定位原排序中最后一个实际存活的普通候选，仅对跨越该截线且 `BeamRankScore` 与动作数都精确相等的块做有限多样性保留：同一 `PotionCount` 内按进展值分组，值从高到低轮流取代表。组内仅无既有保留路由签名的候选按当前回合和完整转置标签隔离，再以零费可执行牌数、可达手牌价值、手牌数稳定排序，写回各组原位置；带签名节点的原组内位置不动。签名存在性直接复用 `RetainedRoutingChoice`，包括其既有跨回合例外，不重新定义时效或依赖观察器。必保候选、各标签和该块各药量已有席数、其他评分块、总容量和工作预算不变；单值组、单席组、完整终局优先模式及含获胜候选的块旁路。这避免同分截线被单一进展值占满，不使用卡牌或遭遇身份，也不保证有限宽搜索完备。
+
+### 多策略路线搜索
+
+`SolverSettings.UseNoveltyPortfolio` 默认关闭，由 Runtime 冻结到 `SearchPolicySnapshot`；设置、路线缓存和问题包均记录该值，玩家可在性能设置中开启。关闭状态下仅当完整结果预计损失至少 8 HP 时，主界面显示一次可永久隐藏的开启引导；7 HP 及以下、搜索中和功能已开启时不显示。`CombatSearchCoordinator.NoveltyPortfolio` 在主搜索内先做有界新颖性探索，再把实际剩余时间和节点交给既有 Beam／多宽度入口，之后照常执行药水审计。只在原有战损／成长／遗物／用药条件达标或玩家接管时提前返回；完整候选沿 `IsBetterPotionPolicyResult` 比较，不合并两个搜索的 frontier 或转置表。必要用药未满足是明确的搜索边界，仍可用剩余预算运行 Beam；模拟错误和取消继续传播。
+
+`NoveltyPortfolioBudget` 只管理预算算术：非首领至多一半时间，章节首领至多四分之一，且最多5秒、2500节点及总节点的四分之一；不足2秒或1000节点时保留原搜索。原始预算是上限，下一成员扣除实际工作而非预约额度；不可分割父节点排空可略过软时间边界。主搜索中的多宽度成员继续扣同一份节点余量；药水审计复用请求时间截止点，节点仍按上游每审计层的 Profile 上限执行。这里没有新增全请求节点硬上限。
+
+`CombatBeamSolver.NoveltySearch` 使用原 `Expand`、回合标注、终局排序与重放；`Phases` 注入父节点内存预约、进度和接管边界。初始根先按 `IsTerminal` 分流，终结根直接进入完成候选和目标判定，只有普通根进入 OPEN；回合准备路线的终局续用戳记从其准备选牌根完整回放。它按生成时的新颖度、已有评分和稳定序号出队。`BfwsPackedNovelty` 只保存类型化特征、整数ID及一／二元组；同分区下跳过父节点已完整记录的未变元组。特征来自当前影子快照，包含牌区／升级／数量、抽牌前缀、能力和资源，不能替代完整状态键。表历史与运行时scratch由单次 `SearchRunContext.Novelty` 拥有，普通 Beam 不创建它。
+
+`BfwsBoundedOpen` 以稳定双端有序集合限制到2048项，满时移除最差项；历史元组上限100万。释放须等当前父节点全部子项确定归属后，按快照引用身份保护已发布兄弟；正常、取消和异常退出均释放剩余模拟器。上限限制条目数，不是硬字节承诺，临时父批次继续遵守 Runtime 内存信号。`BfwsEscapeBudget` 可让同一最近新颖祖先的熟悉后代共享有限配额，当前候选采用0：本轮试验中额外配额在小树有用，但短预算收益不足以抵销开销。
+
+`NoveltySearchTelemetry` 记录纯值工作量、停止原因与改善过程；`NoveltyPortfolioTelemetry` 描述主搜索组合的两个成员，后续药水审计换结果对象时仍保留。最终请求的胜负、用药和全部工作量以 `SolverResult` / `SearchRequestWorkTotals` 为准。算法与验证见[有界新颖性组合](strategy/bounded-novelty-search-20260916.md)。
 
 ### 3.2 CombatBeamSolver 分片
 
@@ -201,6 +213,7 @@ Smart 层间使用 `SmartLayerMemoryForecast` 的同窗分配和转移高水位�
 | `CombatBeamSolver.OrderedMutationRetention.cs` | 有序操作碰撞的谱系、租约、成对激活和预算账本；统一处理续接、到期与普通通道回退 |
 | `CombatBeamSolver.FinalPlanOrdering.cs` | 终局胜负、偷窃、战损、药水、卖血和搜索边界排序 |
 | `CombatBeamSolver.StateEvaluation.cs` | 搜索快照、评分、威胁、stand-pat 和状态特征；手牌可达价值的纯背包计算委托 `ReachableHandValue` |
+| `CombatBeamSolver.NoveltySearch.cs` | 有界新颖性队列与影子特征提取；复用既有展开、终局与 Phases 注入边界 |
 | `CombatBeamSolver.Terminal.cs` | 终局精确回放、逐回合结果、击杀与遗物标注 |
 | `StrategicEffectModel.cs` | 把 Power 的实际触发语义投影为伤害、防伤、资源、牌访问和成长效果；不决定终局胜负 |
 
@@ -415,6 +428,8 @@ renderer 不得重新读取 `SolverResult`、`PlanAction`、`PlanCardChoice` 或
 | `Writer` | Passed/Held/Failed 公共协议字段、内存采集和结果文件原子替换 |
 
 `GeneratedCombatScenario` 只把配置解析为角色/遭遇/装备ID，原版池按ID排序、各类别独立种子流，不推进战斗RNG。`ScenarioBuilder` 的 `GeneratedScenario` 分片在主线程创建实际跑局，核对牌组/进阶之灾/药水槽与原生房间类型；`GeneratedScenarioCardSelector` 只在建局作用域提供确定性或显式选牌，退出建局即释放，不参与正式部署。`Writer` 独占解析配置、目录、战前装备与完整开局状态证据写入。`ProtocolHost.ConfigureSearchOverrides` 在建局配置解析后刷新同一套请求级开关；`Executor` 仍独占实际搜索/部署及设置恢复。批量Python工具只调度各平台原生启动器和证据目录，不接触游戏协议循环或搜索内部。详见[通用场景生成](GENERATED_COMBAT_SCENARIOS.md)。
+
+`tools/OfflineSearchHarness` 是不启动 Godot 的测量宿主，只通过 `UnattendedTestRunner.BeginOfflineSession` 和 `OfflineScenarioSession` 复用协议开关、生成场景注入与结果折叠；`SolverController.DisplayServerNameProvider` 只允许宿主提供固定的 headless 显示服务器名。宿主不拥有正确性断言，也不替代无人测试；搜索行为改动仍由游戏内无人场景验收。详见[离线搜索宿主](OFFLINE_SEARCH_HARNESS.md)。
 
 `UnattendedTestRunner.ReplayState.cs` 属于 `ScenarioBuilder` 的状态注入实现。它只接受同检查点的 `run-state` 与 schema 1 `replay-state` 组合，恢复后必须通过完整 `ContinuationStamp`；不能把部分字段相似的建局称为严格重放。
 

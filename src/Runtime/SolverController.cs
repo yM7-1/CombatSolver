@@ -39,7 +39,7 @@ internal enum ReplanCause
     ExplicitRequest,
 }
 
-internal static class SolverController
+internal static partial class SolverController
 {
     private static SolverCombatSession _combat = new();
     private static SolverSearchSession? _search;
@@ -450,6 +450,12 @@ internal static class SolverController
         _stopFullAutoOnWorseRecalculation = settings.StopFullAutoOnWorseRecalculation;
     }
 
+    /// <summary>
+    /// 显示服务器名字的取值口。游戏内一律是默认值（直接问 Godot），
+    /// 只有 tools/OfflineSearchHarness 这种不启动 Godot 的进程会把它换成固定的 "headless"。
+    /// </summary>
+    internal static Func<string> DisplayServerNameProvider { get; set; } = static () => DisplayServer.GetName();
+
     internal static SearchPolicySnapshot CaptureSearchPolicy(
         SolverSettingsSnapshot settings,
         CombatState state,
@@ -459,7 +465,7 @@ internal static class SolverController
     {
         FramePressureSignal.ResetPressure(
             recoveryEnabled: !string.Equals(
-                DisplayServer.GetName(),
+                DisplayServerNameProvider(),
                 "headless",
                 StringComparison.OrdinalIgnoreCase));
         int maxDegreeOfParallelism = UnattendedTestRunner.SearchMaxDegreeOfParallelismOverride
@@ -493,6 +499,8 @@ internal static class SolverController
             new SearchMemoryPressureSignal())
         {
             Interaction = interaction,
+            UseNoveltyPortfolio = settings.UseNoveltyPortfolio
+                || UnattendedTestRunner.UseNoveltyPortfolioOverride,
             UseBeamWidthPortfolio = settings.UseBeamWidthPortfolio
                 || UnattendedTestRunner.UseBeamWidthPortfolioOverride,
             BeamWidthPortfolioWidths = UnattendedTestRunner.BeamWidthPortfolioWidthsOverride,

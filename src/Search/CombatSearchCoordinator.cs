@@ -207,6 +207,11 @@ internal static partial class CombatSearchCoordinator
             && !policy.PotionStrategy.HasForcedDirectives
                 ? SolverPotionPolicy.Disabled
                 : null;
+        // The progress bar represents the whole request. Individual Beam, novelty,
+        // refinement and potion-audit searches all consume this same time budget.
+        SolverSearchProfile profile = policy.Profile;
+        if (policy.BudgetOverrideMilliseconds is { } deepBudget)
+            profile = profile with { SoftTimeBudgetMilliseconds = deepBudget };
         if (progressCallback != null)
         {
             long completedSearches = 0;
@@ -228,14 +233,12 @@ internal static partial class CombatSearchCoordinator
                 {
                     ReviewedWorldlines = completedSearches + progress.ExpandedNodes,
                     ElapsedMilliseconds = completedElapsed + progress.ElapsedMilliseconds,
+                    RequestBudgetMilliseconds = profile.SoftTimeBudgetMilliseconds,
                 });
             };
         }
         SmartLayerMemoryForecast memoryForecast = new();
         // One search profile drives primary search and all supplemental audits.
-        SolverSearchProfile profile = policy.Profile;
-        if (policy.BudgetOverrideMilliseconds is { } deepBudget)
-            profile = profile with { SoftTimeBudgetMilliseconds = deepBudget };
         if (root.IsActEndingBoss && profile.BeamWidth < 45)
         {
             policy.Diagnostics.Info(
@@ -251,6 +254,8 @@ internal static partial class CombatSearchCoordinator
         {
             long passAllocatedAtStart = GC.GetTotalAllocatedBytes(precise: false);
             long passTransitionsAtStart = policy.RequestWorkTotals?.Snapshot().TransitionCount ?? 0;
+            SearchPolicySnapshot beamPolicy = policy.NoveltySearch == null
+                ? policy : policy with { NoveltySearch = null };
             SolverResult SolveMember(SolverSearchProfile memberProfile, bool refinement)
             {
                 Action<SolverProgress>? memberProgressCallback = refinement && progressCallback != null
@@ -260,7 +265,7 @@ internal static partial class CombatSearchCoordinator
                     root,
                     displayNames,
                     battleDamage,
-                    policy,
+                    beamPolicy,
                     cancellationToken,
                     memberProgressCallback,
                     memberProfile,
@@ -278,8 +283,16 @@ internal static partial class CombatSearchCoordinator
                         interimResultCallback(baseline);
                     }
                     : null;
-            SolverResult passResult = RunBeamWidthPortfolioPass(
-                root, policy, passProfile, passClock, SolveMember, publishBaseline);
+            SolverResult RunBaseline(SolverSearchProfile baselineProfile)
+                => RunBeamWidthPortfolioPass(root, beamPolicy, baselineProfile,
+                    ReferenceEquals(baselineProfile, passProfile) ? passClock : Stopwatch.StartNew(),
+                    SolveMember, publishBaseline);
+            SolverResult passResult = policy.UseNoveltyPortfolio
+                ? RunNoveltyPortfolioPass(root, displayNames, battleDamage, policy, passProfile,
+                    passClock, initialPotionPolicyOverride, cancellationToken, progressCallback,
+                    interimResultCallback, RunBaseline)
+                : RunBaseline(passProfile);
+            NoveltyPortfolioTelemetry? noveltyPass = passResult.NoveltyPortfolio;
             ObserveSmartLayerMemory(
                 policy, memoryForecast, passAllocatedAtStart, passTransitionsAtStart,
                 passResult, passProfile, completedPotionCount: 0);
@@ -310,7 +323,7 @@ internal static partial class CombatSearchCoordinator
                     root,
                     displayNames,
                     battleDamage,
-                    policy,
+                    beamPolicy,
                     cancellationToken,
                     progressCallback,
                     passProfile,
@@ -318,6 +331,9 @@ internal static partial class CombatSearchCoordinator
                     passResult,
                     memoryForecast,
                     interimResultCallback);
+                // The final potion audit may return another result object. Keep the
+                // primary-pass observations alongside the request's final outcome.
+                passResult.NoveltyPortfolio = noveltyPass;
             }
             return passResult;
         }
@@ -443,11 +459,11 @@ internal static partial class CombatSearchCoordinator
             };
         }
 
-        string? RejectMember(int memberBeamWidth)
+        string? RejectMember(BeamWidthPortfolioMemberSpec member)
             => baselineObserved
                 ? BeamWidthPortfolioGate.RejectRefinement(
                     baseline,
-                    memberBeamWidth,
+                    member.BeamWidth,
                     profile.MaxExpandedNodes - expandedByMembers,
                     RemainingMilliseconds(),
                     profile.SoftTimeBudgetMilliseconds,
@@ -456,7 +472,7 @@ internal static partial class CombatSearchCoordinator
 
         BeamWidthPortfolioOutcome<SolverResult> outcome = policy.UseBeamWidthPortfolio
             ? BeamWidthPortfolio.Run(
-                BeamWidthPortfolio.ProductionWidths(profile.BeamWidth, policy.BeamWidthPortfolioWidths),
+                BeamWidthPortfolio.ProductionMembers(profile.BeamWidth, policy.BeamWidthPortfolioWidths),
                 profile.MaxExpandedNodes,
                 profile,
                 RunMember,
@@ -487,6 +503,8 @@ internal static partial class CombatSearchCoordinator
                 : BeamWidthPortfolio.SelectionBaselineFallback;
         BeamWidthPortfolioMember member = new(
             profile.BeamWidth,
+            profile.SecondRankBand,
+            profile.BaseScoreOnly,
             profile.MaxExpandedNodes,
             Ran: true,
             run.ExpandedNodes,
@@ -520,6 +538,8 @@ internal static partial class CombatSearchCoordinator
                 : default;
             BeamWidthPortfolioMemberReport report = new(
                 member.BeamWidth,
+                member.SecondRankBand,
+                member.BaseScoreOnly,
                 member.NodeBudget,
                 member.Ran,
                 Selected: index == outcome.SelectedIndex,
@@ -538,7 +558,9 @@ internal static partial class CombatSearchCoordinator
             telemetry.RecordMember(report);
             policy.Diagnostics.Info(
                 $"[CombatSolver/Test] BEAM_WIDTH_PORTFOLIO_MEMBER index={index} " +
-                $"beam={report.BeamWidth} nodes={report.NodeBudget} ran={report.Ran} " +
+                $"beam={report.BeamWidth} second_rank_band={report.SecondRankBand} " +
+                $"base_score_only={report.BaseScoreOnly} " +
+                $"nodes={report.NodeBudget} ran={report.Ran} " +
                 $"selected={report.Selected} compared={report.Compared} " +
                 $"skipped={report.SkippedReason ?? "-"} " +
                 $"elapsed_ms={report.ElapsedMilliseconds} " +

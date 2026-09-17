@@ -85,6 +85,8 @@ internal sealed record SolverSettingsData
     public bool ShowBattleDamagePerformanceHint { get; init; } = true;
     public bool ShowActTransitionBossHpStrategyHint { get; init; } = true;
     public bool ShowFinalBossHpStrategyHint { get; init; } = true;
+    public bool ShowNoveltyPortfolioHint { get; init; } = true;
+    public bool ShowSpeedXWarning { get; init; } = true;
     public bool SearchCompletionNotificationsEnabled { get; init; } = true;
     public SolverSearchCompletionNotificationMode SearchCompletionNotificationMode { get; init; }
         = SolverSearchCompletionNotificationMode.OnlyWhenGameInBackground;
@@ -107,7 +109,8 @@ internal sealed record SolverSettingsData
     public int PerformanceMigrationVersion { get; init; }
     public SolverPerformancePreset? PerformancePreset { get; init; } = SolverPerformancePreset.Medium;
     public int? SearchMaxDegreeOfParallelism { get; init; }
-    public bool UseBeamWidthPortfolio { get; init; }
+    public bool UseBeamWidthPortfolio { get; init; } = true;
+    public bool UseNoveltyPortfolio { get; init; }
     public double? SearchTimeLimitSeconds { get; init; }
     public bool EnableNoGcRegion { get; init; } = true;
     public double? NoGcRegionBudgetGigabytes { get; init; } = 16d;
@@ -154,6 +157,7 @@ internal sealed record SolverSettingsSnapshot(
     public int? BrightestFlameMaxHpLossLimit { get; init; }
     public bool IgnoreLongTermRewards { get; init; }
     public bool UseBeamWidthPortfolio { get; init; }
+    public bool UseNoveltyPortfolio { get; init; }
 }
 
 internal static class SolverSettings
@@ -164,11 +168,13 @@ internal static class SolverSettings
     public const float MinimumOverlayWidth = 400f;
     public const float MinimumOverlayHeight = 300f;
     public const float MaximumOverlaySize = 100_000f;
-    internal const int CurrentPerformanceMigrationVersion = 243;
+    private const int UnifiedPerformanceMigrationVersion = 243;
+    private const int BeamWidthPortfolioDefaultMigrationVersion = 244;
+    internal const int CurrentPerformanceMigrationVersion = 246;
     private static readonly SolverPerformanceValues LowPerformance = new(
         new SolverSearchProfile(
             BeamWidth: 45,
-            MaxExpandedNodes: 12_000,
+            MaxExpandedNodes: 60_000,
             MaxCardBranchesPerNode: 24,
             MaxPileChoiceBranchesPerAction: 12,
             MaxHandChoiceBranchesPerAction: 16,
@@ -178,7 +184,7 @@ internal static class SolverSettings
     private static readonly SolverPerformanceValues HighPerformance = new(
         new SolverSearchProfile(
             BeamWidth: 90,
-            MaxExpandedNodes: 50_000,
+            MaxExpandedNodes: 250_000,
             MaxCardBranchesPerNode: 48,
             MaxPileChoiceBranchesPerAction: 28,
             MaxHandChoiceBranchesPerAction: 36,
@@ -186,7 +192,7 @@ internal static class SolverSettings
     private static readonly SolverPerformanceValues VeryHighPerformance = new(
         new SolverSearchProfile(
             BeamWidth: 135,
-            MaxExpandedNodes: 100_000,
+            MaxExpandedNodes: 500_000,
             MaxCardBranchesPerNode: 72,
             MaxPileChoiceBranchesPerAction: 42,
             MaxHandChoiceBranchesPerAction: 54,
@@ -242,6 +248,8 @@ internal static class SolverSettings
             $"stop_on_worse_recalculation={migrated.StopFullAutoOnWorseRecalculation} " +
             $"detailed_diagnostic_logs={migrated.EnableDetailedDiagnosticLogs} " +
             $"show_battle_damage_performance_hint={migrated.ShowBattleDamagePerformanceHint} " +
+            $"show_novelty_portfolio_hint={migrated.ShowNoveltyPortfolioHint} " +
+            $"show_speedx_warning={migrated.ShowSpeedXWarning} " +
             $"act_transition_boss_hp_strategy={migrated.ActTransitionBossHpStrategy} " +
             $"final_boss_hp_strategy={migrated.FinalBossHpStrategy} " +
             $"acceptable_battle_hp_loss={migrated.AcceptableBattleHpLoss} " +
@@ -296,6 +304,7 @@ internal static class SolverSettings
             BrightestFlameMaxHpLossLimit = data.BrightestFlameMaxHpLossLimit,
             IgnoreLongTermRewards = data.IgnoreLongTermRewards,
             UseBeamWidthPortfolio = data.UseBeamWidthPortfolio,
+            UseNoveltyPortfolio = data.UseNoveltyPortfolio,
         };
     }
 
@@ -527,7 +536,7 @@ internal static class SolverSettings
         ValidateRange(data.SearchBeamWidth, 1, 512, nameof(data.SearchBeamWidth));
         ValidateRange(data.SearchPotionFreeBeamWidth, 1, 256, nameof(data.SearchPotionFreeBeamWidth));
         ValidateRange(data.SearchPotionBeamWidth, 1, 256, nameof(data.SearchPotionBeamWidth));
-        ValidateRange(data.SearchMaxExpandedNodes, 100, 100_000, nameof(data.SearchMaxExpandedNodes));
+        ValidateMinimum(data.SearchMaxExpandedNodes, 100, nameof(data.SearchMaxExpandedNodes));
         ValidateRange(data.SearchMaxCardBranchesPerNode, 1, 100, nameof(data.SearchMaxCardBranchesPerNode));
         ValidateRange(data.SearchMaxPileChoiceBranchesPerAction, 1, 100,
             nameof(data.SearchMaxPileChoiceBranchesPerAction));
@@ -612,6 +621,12 @@ internal static class SolverSettings
             throw new InvalidDataException($"{name} must be between {minimum} and {maximum}.");
     }
 
+    private static void ValidateMinimum(int? value, int minimum, string name)
+    {
+        if (value is { } actual && actual < minimum)
+            throw new InvalidDataException($"{name} must be at least {minimum}.");
+    }
+
     private static void ValidateRange(float? value, float minimum, float maximum, string name)
     {
         if (value is { } actual && (actual < minimum || actual > maximum || float.IsNaN(actual)))
@@ -643,13 +658,33 @@ internal static class SolverSettings
         if (data.PerformanceMigrationVersion >= CurrentPerformanceMigrationVersion)
             return data;
 
-        return ApplyPerformancePreset(
-            data with
+        SolverSettingsData migrated = data;
+        if (migrated.PerformanceMigrationVersion < UnifiedPerformanceMigrationVersion)
+        {
+            migrated = ApplyPerformancePreset(
+                migrated with
+                {
+                    PerformanceMigrationVersion = UnifiedPerformanceMigrationVersion,
+                    NoGcRegionBudgetGigabytes = DefaultNoGcRegionBudgetGigabytes,
+                },
+                SolverPerformancePreset.Medium);
+        }
+        if (migrated.PerformanceMigrationVersion < BeamWidthPortfolioDefaultMigrationVersion)
+        {
+            migrated = migrated with
+            {
+                PerformanceMigrationVersion = BeamWidthPortfolioDefaultMigrationVersion,
+                UseBeamWidthPortfolio = true,
+            };
+        }
+        if (migrated.PerformanceMigrationVersion < CurrentPerformanceMigrationVersion)
+        {
+            migrated = migrated with
             {
                 PerformanceMigrationVersion = CurrentPerformanceMigrationVersion,
-                NoGcRegionBudgetGigabytes = DefaultNoGcRegionBudgetGigabytes,
-            },
-            SolverPerformancePreset.Medium);
+            };
+        }
+        return migrated;
     }
 
     private static SolverPerformanceValues BuildCustomPerformance(SolverSettingsData data)

@@ -1,10 +1,51 @@
 # CombatSolver 开发笔记与未来构想
 
-## 未发布：能力卡持续收益估值首批补值（2026-09-17）
+## 未发布：能力卡持续收益估值通道（2026-09-17）
 
-- 辉光（RadiantTincture 施加的 RadiancePower）每回合返能从单点分改为按 `每回合能量 × min(层数, 剩余回合)` 折算进中间保路估值的 Resource 维度；石甲（StoneArmor 施加的 PlatingPower）每回合末 +甲按 `amount × 剩余回合` 折算进 Prevention 维度并沿用共享入伤上限。两者与既有的环绕轨道/自动化持续返能估计同属一个机制族，只影响保留层排序，不改变终局分数、状态键与模拟边界。
-- 需求声明补充 `RemainingTurns`，第三方 Power 登记优先级不变。
-- 已验证：配对同环境 broad-12 回归无一致差异（注意：该套件为 4 路并行搜索，同 DLL 重跑方差 ±8~33，属套件噪声）；固定根上路线未实际饮用/打出被测能力时通道不生效，两项 materiality 验证待做，已在提交信息与 `docs/strategy/STRATEGY_OPTIMIZATION_LOG.md` 2026-09-17 节明确声明，不据此宣称战损改善。
+- 新增四条持续收益保路估值通道：辉光（RadiantTincture 施加的 RadiancePower）按已验证的 RecurringEnergyGain 可消费缺口路径折算每回合返能；石甲（StoneArmor 施加的 PlatingPower）每回合末 +甲按 `层数 × 剩余回合` 折算进 Prevention 并沿用共享入伤上限；壁垒（Barricade）按 `当前格挡 × min(剩余回合, 8)` 线性保留折算（上下文新增 PlayerBlock init 字段，Build 签名不变）；再生按 `治疗量 × min(剩余回合, 层数)`（层数递减天然有界）。幽影形态每回合 -敏此前被默认 Scaling 当收益计，现计零（IntangiblePower 卡值另行处理）。
+- 需求声明补充 `RemainingTurns`，第三方 Power 登记优先级不变。RitualPower 按 DemonForm 同构三角公式实测退化（74→79，单线程确定性），已按负结果纪律撤回。
+- 已验证：各通道配对同环境 broad-12 回归逐位一致或仅并行噪声带内差异（同 DLL 重跑方差 ±8~33 已量化）；专用单线程 materiality 根上 Radiance/Regen 通道确认活跃但未改变路线，Barricade/Plating 根路线未命中被测能力。**不据此宣称战损改善**，泛化验证待跨 archetype 玩家报告包。
+## 0.40.2：多策略路线搜索默认关闭与大战损引导（2026-09-17）
+
+- 「多策略路线搜索（实验）」对新安装保持默认关闭；设置迁移版本提升到 246，但升级时完整保留玩家当前的开启或关闭选择。多宽度路线精炼仍默认开启且没有独立横幅，设置页的开关与状态反馈保持不变。
+- 两条战损引导统一改为预计损失至少 8 HP 时显示，并将玩家文案改为「大战损」；7 HP 及以下不显示，避免玩家在前期普通小额掉血时同时收到过多信息。多策略开启引导还要求功能处于关闭状态；点击横幅会永久隐藏，主动开启功能也会视为已经处理该引导。
+
+## 0.40.2：搜索进度改用请求级预算（2026-09-17）
+
+- 修复搜索进度条在第一轮节点增长较快时几乎填满、后续路线精炼、药水审计或追加搜索仍在继续却长期停在末端的问题。进度现在按整次请求已经消耗的时间预算推进，不再把某一个子搜索的节点上限当作整次计算的总工作量；世界线计数、搜索预算、路线质量与停止条件均不变。
+- 搜索仍在运行时进度最多显示到 95%，为软时间边界后的当前批次排空和最终候选复核保留明确余量；完成后继续切换到原结果状态。
+
+## 0.40.2：变形池根快照缓存（2026-09-17）
+
+- 新增根级变形候选池快照 `RootCombatTransformationPoolSnapshot`，按 `(player, cardPool)` 缓存 `CardPoolModel.GetUnlockedCards` 的**未过滤原始序列**（保持上游顺序与实例身份），并在 `Fork` 间不可变共享（`SimulatedCombatState._rootTransformationPools`）。缓存只覆盖玩家角色池与规范无色池；可变池、非规范池、外来玩家或外来约束一律回退上游路径，不做猜测。所有进入缓存的卡都要求原版程序集、非 mutable 且与 `CanonicalInstance` 同一实例。
+- `TurnStartChoiceSupport.ResolveCapturedChoice` 的 `Transform` 分支改走 `CombatCardGenerationExtensions.CreateRandomCardForTransform`，命中快照时使用 sts2 已有的 options 重载 `CardFactory.CreateRandomCardForTransform(original, options, isInCombat, rng)`。逐分支的稀有度、`CanBeGeneratedInCombat`、`Id != original.Id` 与人数过滤仍由 `CardFactory.GetFilteredTransformationOptions` 执行。
+- **RNG 语义不变**：`GetFilteredTransformationOptions` 在选取前一律 `.ToArray()` 物化，两条重载传给 `Rng.NextItem` 的都是 `CardModel[]`，`NextItem` 对数组直接使用否则 `ToArray()`，两者都只消费一次 `NextInt(0, length)`。因此缓存序列与上游同内容同顺序时，RNG 消耗逐字段相同。这是本改动唯一需要严格验证的语义点，已由契约覆盖。
+- 该路径此前每个展开节点都重复执行 `GetUnlockedCards` → `FilterThroughEpochs` → `ModelDb.GetId` → `ModelId.SlugifyCategory`（3 次正则 + 文化敏感 `EndsWith` 走 ICU 排序）。本轮之前的 `perf` 采样显示 `FilterThroughEpochs` 覆盖搜索展开样本的 49%、`SlugifyCategory` 26%、`ModelDb.GetId` 46%。
+- 职责边界：新增快照属于 Search 的根级只读投影，与既有 `RootCombatCardGenerationPoolSnapshot` 同层；接口在 `ICombatPredictionCardGenerationPoolSnapshot` 上扩展，卡牌生成扩展仍在 Engine。未改动 Runtime、部署编排、UI、设置或发布流程。
+- 真实无头 A/B（基线 `41f9478`，同根、`VeryHigh`、beam 48、`--dop 1`、顺序 ABBA）：KAISER_CRAB_BOSS @2000 节点 18.78 秒 → 9.07 秒（2.072 倍）。**加速比随工作量上升**：另造 4 个厚牌组 Boss 根并把预算标定到基线单场 ≥20 秒后，KNOWLEDGE_DEMON_BOSS 54.11→14.76 秒（3.667 倍）、THE_KIN_BOSS 41.78→14.43 秒（2.895 倍）、KAISER_CRAB_BOSS 37.32→14.86 秒（2.511 倍）、THE_INSATIABLE_BOSS 23.63→10.79 秒（2.191 倍）。**基线 >20 秒的 4 个根加速比 2.191–3.667 倍，重场景下收益不缩水**；成因未做采样取证，只作为实测趋势。收益**场景相关**：不走变形路径的提前穷尽根只有 1.041 倍（silent-discard）、1.426 倍（QUEEN_BOSS）。**对照组**实验把同批 Boss 遭遇改用默认薄牌组（不注入厚牌组），三者全部提前穷尽、加速比 0.984 / 1.015 / 0.990 倍，即收益为零（其中略低于 1.0 的是 1–3 秒量级的噪声，不记作退化），确认收益只来自真正执行变形选择的战斗，不能当作全局面板。详见[本轮报告](performance/transform-pool-root-snapshot-20260917.md)。
+- **并行度 8**（生产并行度）复测，预算 12000 节点、同根、顺序 ABBA：厚牌组 KAISER_CRAB_BOSS 46.27→17.91 秒（2.583 倍）、KNOWLEDGE_DEMON_BOSS 26.19→10.92 秒（2.398 倍）、THE_KIN_BOSS 34.40→15.80 秒（2.178 倍）、QUEEN_BOSS 7.26→3.89 秒（1.865 倍）、THE_INSATIABLE_BOSS 13.29→7.84 秒（1.696 倍）；薄牌组对照组 1.000 / 0.989 / 0.983 倍。并行度不会让收益消失，结论与 dop 1 一致。
+- **DOP 8 不能提供字段级等价性证据**：`compare_results.py` 在 DOP 8 下报 `DIFFERENT`，但差异只有 `roundReplayPrefixCaptures` 与 `executionChoiceReuses` 两个调度相关复用计数器，`route` / `rootState` / `catalog` 全部 0 处不同。决定性证据是**基线自比**在 DOP 8 下同样在这一个计数器上不同（A1 vs A2：7808 vs 7794；B1 vs B2：7802 vs 7799），即取决于哪个 worker 先命中复用缓存，是墙钟调度产物而非决策输出。因此该差异是并行非确定性，不可归因于本次改动；字段级等价性仍以 DOP 1 的 7 根全一致为准。
+- 瞬时分配同时减半：每节点总分配 2.06 MB → 1.04 MB。但**峰值工作集约 385 MB → 约 405 MB、峰值托管堆约 157 MB → 约 179 MB，没有改善、反而略升**。本轮只消除了变形路径的重复临时分配，**未触及节点局面的驻留内存**，最初「保存每个节点局面内存太大」的问题本次未处理；峰值上升的成因未取证，不记作结论。
+- 等价性用仓库自带 `tools/OfflineSearchHarness/compare_results.py` 对跑，**7 个根全部逐字段一致**（crab@2000 170 字段、KAISER_CRAB_BOSS@6000 242、silent-discard@6000 192、QUEEN_BOSS@6000 152、THE_KIN_BOSS@6000 174、KNOWLEDGE_DEMON_BOSS@6000 212、THE_INSATIABLE_BOSS@6000 234；`mismatched_roots=0`、无 `left_only`/`right_only`），覆盖 `solverMetrics` 非时间/内存字段、选中路线每个动作、根 `ContinuationStamp` 与 `catalogFingerprint`。
+- 契约 `TRANSFORMATION-POOL-CACHE` Passed：缓存序列与上游逐实例同序、跨 `Fork` 不可变共享、可变池/外来约束/外来池被拒绝、规范无色池被正确服务、缓存路径与原生路径产出同一张牌且 `CombatCardSelection` 五字段 RNG 状态与完整预测延续状态一致、父模拟与实机根未被改动。初版契约曾因断言无色池必须被拒绝而失败，查明为契约自身错误（无色池是合法回退池），实现无缺陷。
+- 未验证：可见 Steam 性能未测，上述倍数只是无头数据；峰值内存成因未取证；收益倍数场景相关（0.99–3.667 倍），不能外推为全局面板。Bash 结构门禁 `tools/verify-refactor-boundaries.sh` 通过（`REFACTOR_BOUNDARIES_OK search_files=114`，退出码 0；增量 1 即本次新增的快照文件）。
+
+## 0.40.1：多策略回合准备选牌修复（2026-09-16）
+
+- 夸克专用发布包完全移除 RitsuLib，不再包含其分发包、解压目录或内部资产 ZIP。统一发布脚本只保留 CombatSolver 最小包内容，并按实际缺口生成不参与 Mod 加载的无压缩填充条目，使文件严格超过 15 MiB；GitHub 最小包和创意工坊内容保持不变。
+- 排查日志站 0.40.0 的 12 份 `TurnSetupFailure` 问题包，确认都在多策略路线探索内失败。其中 11 份是在生成跨回合续用戳记时直接从普通战斗根回放，遗漏了已经选择的回合准备牌，因而首个计划动作面对空手牌；另 1 份把准备阶段已经终结的根放入探索队列，再次展开后触发“终结搜索节点不应进入展开阶段”。
+- 多策略探索现在与普通 Beam 一样，初始根先按终结状态分流：终结根直接进入完成候选和目标判定，普通根才进入探索队列。跨回合续用回放统一从该路线的准备选牌根开始，完整保留准备选牌后形成的手牌、牌堆和状态；回放异常时同样释放临时模拟器。
+- 新增可强制开启多策略搜索的无人测试协议开关和回合准备选牌回归夹具。铁甲战士＋烤手套场景在 5 秒固定预算、DOP2 下通过，保留 `TOASTY_MITTENS` 选牌并完成 3 回合零战损路线。
+
+## 0.40.0：路线精炼、节点预算与多策略搜索（2026-09-16）
+
+- 主界面新增可永久关闭的「多策略路线搜索（实验）」引导横幅，说明追求更优路线的玩家可从「设置 > 性能」手动开启；点击横幅或主动开启功能都会持久化为不再提示。检测到皮皮极速（SpeedX）后的兼容性提醒从综合反馈区拆为独立可点击横幅，点击后同样永久隐藏，不影响计划外重算、异常反馈和新版本提示。
+- 多宽度路线精炼改为默认开启；设置迁移版本提升到 244，升级时会把所有旧配置中的精炼开关强制置为开启，避免上一版默认 `false` 被误当作玩家主动关闭。迁移保留性能档、自定义参数、NoGC 与多策略搜索设置；迁移完成后玩家仍可再次关闭。次段成员改由全局剪枝入口显式启用，长期资源、开局通道和终局排序不会因与 Beam 宽度使用相同 limit 而误触发次段取样。
+- 四档节点预算统一提高到原来的 5 倍：低档 60,000、中档 120,000、高档 250,000、极高 500,000；时间、Beam 与单节点分支保持原值。自定义节点预算取消 100,000 的配置上限，只保留至少 100 且必须能表示为整数的输入要求。
+- 性能页新增默认关闭的「多策略路线搜索（实验）」。开启后在同一请求预算内先探索结构不同的路线，再由当前 Beam 使用余量；结果沿用既有战损、成长、药水与复活排序。无需训练或额外依赖，不改变原动作模拟。
+- 新颖性用值类型事实和紧凑事实对记录，同分区父节点只补变化部分；队列上限 2,048 项并及时释放被淘汰模拟图。探索最多半数时间（章节首领四分之一）、5 秒、2,500 节点和总节点四分之一，小预算直接走原搜索。
+- 设置、请求冻结、路线缓存、问题包政策与中英界面同步；取消、当前回合接管和已显示路线接管沿用生产边界。仍由 Runtime 管理 GC 与回收续搜。
+- 这是质量与成本存在场景差异的可选功能，详细实验、反例及测试见[本轮报告](strategy/bounded-novelty-search-20260916.md)。
 
 ## 未发布：录像回放临时费用与充能球恢复（2026-09-15）
 
@@ -25,6 +66,24 @@
 - 性能设置新增“多宽度路线精炼（实验）”。玩家开启后，求解器先运行当前预设的基线搜索；只有基线较快完成、仍有改进空间且节点、时间和内存余量足够时，才依次尝试 `2/3` 与 `3/2` 的 Beam 宽度并选取更优完整路线。首条路线照常显示，后续阶段标明“正在精炼路线”；设置、路线缓存身份与问题包同步记录该开关。
 - 适配 RitsuLib 0.6.0 的多程序集版本包：构建改为导入框架提供的兼容程序集与共享程序集引用，无头快照冻结完整版本包，清单最低依赖同步提升到 0.6.0；统一发布脚本的夸克打包前置也改为严格要求完整的 `STS2 RitsuLib 0.6.0.zip`，不回退旧版。RitsuLib 已接管 BaseLib 目标类型的登记与弱缓存，CombatSolver 删除对旧私有查询闭包的重复补丁；该补丁在 0.6.0 中找不到目标并中断初始化，连带造成瞬间出牌补丁和原生弃牌观察补丁未应用。现在初始化可完整应用全部补丁，瞬间模式下生存者的原生弃牌选择能够完成并收束出牌动作。
 - 合入 PR #96 的选牌执行续接、生成池与派生工作复用，以及路线行控件复用。搜索预算、动作顺序、路线政策和未知语义的完整回放边界保持不变；详细实现与原 PR 验证记录保留在后续未发布章节。
+
+## 未发布：多宽度路线精炼扩展成员类型（2026-09-16）
+
+- 组合成员从"一个宽度"扩成"宽度 + 排序方式"（`BeamWidthPortfolioMemberSpec`：宽度、是否次段、是否只用基础分）。次段成员的宽度与基线相同，`SolverSearchProfile.SecondRankBand` 置位后，`RankBest` 只在全局剪枝（`limit` 等于 Beam 宽度）里把分数序前 W 位挪到队尾再截断，普通席位因此落在第 W+1 至 2W 位；必保通道置换、边界多样化和药水配额仍按纯分数序的候选池进行。基础分成员的宽度也与基线相同，`SolverSearchProfile.BaseScoreOnly` 置位后 `BeamRankScore` 只返回 `node.Score`，不加九项附加分；终局排序与路线比较不变。默认成员列表变为 `[基线, 基线×2/3, 基线×3/2, 次段 基线, 基础分 基线]`；无人测试显式给出宽度列表时只有宽度成员。开关仍默认关闭，两个标志未置位时保留逻辑与排序逐位不变。
+- 动机：离线定位的 19 个"更优路线被剪掉"的位置里 12 个是分数截断，被剪掉的候选排名都在该层后 30%，次段成员直接搜这一区间；基础分成员去掉附加分对能量、铺垫等的偏好。120 根离线批次（口径同 PR #94）：两种成员单独替代基线都不是改善（次段 Very High 净 +125，变好 32 变差 23，Medium −27；基础分 Very High +60，29 / 20，Medium −172）；作为组合成员次段 Very High +222（21 / 2）、Medium +113（12 / 2），基础分 Very High +148（23 / 3）、Medium +113（13 / 3）；叠加：Very High 90+200 的 +276 → 加次段 +330 → 再加基础分 +371，Medium 16+36 的 +314 → +380 → +432。试过的四种排序变体只有"做减法"的两种有效；去能量加分的变体单独 +184 / +109，但叠在次段之上只剩 +14 / 0，不进默认列表；改持续效果口径与增加铺垫项的两种无效。另外两种取段方式收益不高于整段或有超时根，未采用。
+- 成本：两种成员都不改变单节点的模拟与评分成本，展开数为基线的 0.92 到 1.10 倍（次段）与 0.91 到 1.03 倍（基础分）；生产路径上它们是首轮之后按顺序多跑的搜索，经过同一套门控，不超过配置的时间与节点上限，峰值内存取各成员最大值。基础分成员在 Very High 120 根里有两根（IRONCLAD-BOSS-03、SILENT-ELITE-10）搜索时间超过 600 秒（基线 328 s / 127 s），由剩余预算截断。成员明细与 `solverMetrics.portfolioMembers` 增加 `secondRankBand`、`baseScoreOnly` 字段，`BEAM_WIDTH_PORTFOLIO_MEMBER` 日志同步。
+- 验证：PR 分支 DLL 两个标志都不置位时，与 0.39.0 main 在 5 根上 61 项指标、全部动作与根戳记逐字段相同。同一 DLL 上 120 根每 4 根取 1 的 30 根开关对照：次段作为成员 Very High 净 +51（5 / 0，1 根死转活）、Medium +21（4 / 1，1 根死转活）；基础分作为成员 Very High 净 +41（4 / 0，1 根死转活）、Medium +86（9 / 0，1 根死转活）；与研究分支 DLL 在同一子集上的结果方向一致。离线检查 `BEAM_WIDTH_PORTFOLIO_OK checks=73`，Bash 结构门禁 `search_files=105`，Release 构建零警告零错误。未运行可见 Steam 或 Windows 无人测试；生产路径的时间与内存数据仍以 PR #94 的 A/B 为准。
+
+## 未发布：离线搜索宿主（2026-09-16）
+
+- 新增 `tools/OfflineSearchHarness/`：不启动 Godot，在普通 .NET 9 进程里建出一场战斗、推进到玩家第一回合，再调 `CombatRootSnapshot.Capture` 与 `CombatSearchCoordinator.Solve`（或单次 `CombatBeamSolver`）跑一次固定预算搜索。用途是批量测量搜索量与路线，不做正确性验收；用法、口径、绕过表与限制见 [离线搜索宿主](OFFLINE_SEARCH_HARNESS.md)。
+- 为此在 `src/` 加了四处入口，都不改搜索、评分、保留与协调器的任何行为，且在宿主不用它们时游戏内路径与改动前一致：
+  - `CombatSolver.csproj` 加 `<InternalsVisibleTo Include="OfflineSearchHarness" />`，宿主对模组本体不做公开化。
+  - `UnattendedTestRunner.BeginOfflineSession(OfflineSessionOptions)`：把固定预算、预算毫秒、并行度、宽度组合开关按无人测试请求的同一段映射（`ProtocolHost.ConfigureSearchOverrides`）写进协议主机，返回的作用域释放即还原。
+  - `UnattendedTestRunner.OfflineScenarioSession`：建一个不挂在 `NGame` 上的 runner，把 `ScenarioBuilder` 的生成场景注入方法与装备注入静态方法原样转出去；宿主因此不再用反射写私有成员或造未初始化实例。
+  - `SolverController.DisplayServerNameProvider`：显示服务器名字的取值口，默认仍直接问 Godot，只有离线进程把它换成固定的 `"headless"`。
+- `tools/verify-refactor-boundaries.sh` / `.ps1` 的两条边界声明随之改为 `partial`（`ProtocolHost`、`Writer`），没有新增或删除边界。
+- 合并到当前 Windows 主线时补齐离线宿主导入多版本 RitsuLib 引用所需的 `0.111.0` 目标，并让运行期解析器同时查找该版本的兼容程序集与共享程序集；宿主与模组工程现在使用同一完整版本包。
 
 ## 未发布：路线界面复用与语言通知修复（2026-09-15）
 

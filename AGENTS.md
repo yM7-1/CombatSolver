@@ -1,6 +1,8 @@
 # CombatSolver 仓库工作指令
 
-> **本轮追加（2026-09-17）：** 能力卡方向白天批次：T1 签名线截断修复三变体实测后撤回（QUEEN 34→22 可达但 AEONGLASS 稳定退化 +26/27，机制精确定位为「多卡选择 RoutingChoiceSignature 坍缩 + depth-4/5/6 连锁截断」，跨层机制留下一工作块）；T2 首批补值 RadiancePower（9379f1e）与 PlatingPower（998437d）走 StrategicEffectVector 保留通道（零退化已验证、materiality 未验证已声明）；持续收益盘点（8 候选+7 未模拟）与**验证方法学发现**（broad-12 套件 4 路并行重跑方差 ±8~33、小估值改动 Δ 小于噪声带不可归因、旧基线属 Mod 栈时代不可比）记录在 `docs/strategy/STRATEGY_OPTIMIZATION_LOG.md` 2026-09-17 节。本批不启动可见Steam、不提升版本、不发包。
+> **本轮追加（2026-09-17）：** 能力卡方向白天批次：T1 签名线截断修复三变体实测后撤回（QUEEN 34→22 可达但 AEONGLASS 稳定退化 +26/27，机制精确定位为「多卡选择 RoutingChoiceSignature 坍缩 + depth-4/5/6 连锁截断」，跨层机制留下一工作块）；T2 补值 RadiancePower（9379f1e，后经 1b1a15a 改可消费缺口路径）、PlatingPower（998437d）、BarricadePower（b3b0fc5）、RegenPower（cb58a9f）与 WraithForm 方向性纠错（f55e9a8）走 StrategicEffectVector 保留通道（全部零退化已验证、materiality 状态已声明）；Ritual 三角成长实测退化已撤回。持续收益盘点（8 候选+7 未模拟）与**验证方法学发现**（broad-12 套件 4 路并行重跑方差 ±8~33、小估值改动 Δ 小于噪声带不可归因、旧基线属 Mod 栈时代不可比）记录在 `docs/strategy/STRATEGY_OPTIMIZATION_LOG.md` 2026-09-17 节。本批不启动可见Steam、不提升版本、不发包。
+
+> **当前批次（2026-09-16）：** 用户授权实现无需训练的搜索改进并提交新PR；基线为上游 `7f806de`（0.39.0）。新增可选有界新颖性／Beam组合，独立队列、共享请求预算及既有终局政策；说明与本轮证据见 [有界新颖性组合](docs/strategy/bounded-novelty-search-20260916.md)。不启动可见Steam、不提升版本、不发包或上传创意工坊。
 
 > **本轮追加（2026-09-15）：** 用户授权继续完成成本较低且有收益的复用，并更新正式PR #96。保留路线行按完整显示值/本地化身份复用，以及同帧语言往返通知修复；投影洗牌缓存经两场8份完整对照后撤回，追加提交不改变Search/Engine/Runtime。路线、语言、部署显示合同及两端门禁通过，记录见 `docs/performance/performance-pr-20260915.md` 的后续追加章节。本批不启动可见Steam、不提升版本、不发包或上传创意工坊。
 
@@ -53,6 +55,7 @@ CombatSolver 是《杀戮尖塔 2》的单人战斗路线求解器 Mod，使用 
 - [开发笔记](docs/DEVELOPMENT_NOTES.md)：版本历史与未发布行为变化。
 - [第三方 Mod 适配手册](docs/THIRD_PARTY_ADAPTERS.md)：面向外部 Mod 作者的登记点总表、登记纪律与验收标准；同时是「哪些位置还是封闭开关」的单一维护入口。
 - `tools/verify-refactor-boundaries.ps1`（Windows / PowerShell 7）与 `tools/verify-refactor-boundaries.sh`（Linux / Bash）：当前架构边界的等价可执行门禁。
+- `tools/OfflineSearchHarness/`：不启动 Godot、在普通 .NET 进程里批量跑搜索的离线宿主，用法与口径见 [离线搜索宿主](docs/OFFLINE_SEARCH_HARNESS.md)。只产指标，不做正确性验收。
 
 源码与当前可重跑结果优先于历史说明。职责发生变化时，同一提交更新 `docs/ARCHITECTURE.md`、相关 skill 和结构门禁，避免多份地图继续漂移。
 
@@ -210,7 +213,7 @@ Windows `.ps1` 与 Linux `.sh` 都是受维护的平台原生入口：PowerShell
 - 没有活动发布批次时，玩家问题包修复和用户提出的功能修改默认以补丁版本、提交、一次 Release 构建和一次最小 ZIP 定版；用户明确说不发包时停止在提交。
 - 发布口令按字面分层执行：`准备发版` 完成版本同步、玩家更新日志、提交、一次 Release 构建和一次最小 ZIP，不创建标签、不上传、不推送；带有“给我审核/我拍板后”的请求只整理并提交更新日志草案，等用户批准后再构建定版。`发版/发布` 在必要时补齐准备步骤、创建当前版本的 annotated tag，再用 `tools/publish-release.ps1` 同步发布创意工坊、GitHub Release 与夸克网盘。`上传/更新创意工坊` 只发布当前已定版版本；`推送/同步远端` 只提交明确属于当前任务的跟踪文件并推送当前分支及已存在的当前版本标签。监控后台最新版提示由用户维护，发布流程不读写。只有用户明确要求“完整发布门禁/完整验收/干净安装”才执行完整门禁。
 - 最小发包链固定为：完成必要行为验证、提交、一次 Release 构建、一次最小 ZIP 创建。后续没有行为源码或构建输入变化时，到 ZIP 创建成功即结束，不追加发布后复测或包内容复核；前一阶段已有成功证据时直接复用，不重做。
-- GitHub Release 的最小 ZIP 统一写入仓库根目录的 `releases/CombatSolver-<版本号>.zip`。夸克网盘由统一脚本另建 `releases/CombatSolver-<版本号>-Quark.zip`，在最小包基础上原样加入 `releases/STS2 RitsuLib 0.6.0.zip`，且总大小必须严格超过 10 MiB；前置 ZIP 不解压。当前工作区发布目录为 `D:\Desktop\sts2mod\CombatSolver\releases`，所有发布产物均由 Git 忽略。
+- GitHub Release 的最小 ZIP 统一写入仓库根目录的 `releases/CombatSolver-<版本号>.zip`。夸克网盘由统一脚本另建 `releases/CombatSolver-<版本号>-Quark.zip`：只保留 CombatSolver 最小包内容，不加入 RitsuLib 或其他依赖；不足时增加无压缩的 `QUARK_UPLOAD_PADDING.bin`，使总大小严格超过 15 MiB。填充条目不参与 Mod 加载，解压后可以删除。当前工作区发布目录为 `D:\Desktop\sts2mod\CombatSolver\releases`，所有发布产物均由 Git 忽略。
 - 用户明确要求“上传/更新创意工坊”时，直接上传仓库当前已经定版的最新版，并在创意工坊 `changeNote` 中附本次面向玩家的更新说明。创意工坊暂存目录中的旧 DLL、manifest 或旧 `changeNote` 不是最新版来源；存在尚未定版的当前改动时，只补齐缺失的最小发包阶段。上传成功后不打开页面或重新下载确认。
 - 创意工坊更新说明与 `docs/DEVELOPMENT_NOTES.md` 的开发记录用途不同。开发记录用于保留根因、内部职责、测试证据和性能数据；更新说明只提炼玩家在游戏中能感知的新增、优化、修复、UI/操作、兼容性与必要限制。禁止写类名、方法名、算法内部、内存/GC 实现、runId、提交、构建、测试和打包细节，也不要直接复制开发记录。跨多个版本更新时合并同类玩家改动，不逐版堆技术流水账。
 - 普通开发完成后直接提交当前任务改动；“干净提交”表示显式暂存本任务文件、保留用户其他改动并排除构建产物、发布包和暂存内容，不表示清空工作区。没有新改动但已有本地提交领先远端时，直接推送，不创建空提交。
