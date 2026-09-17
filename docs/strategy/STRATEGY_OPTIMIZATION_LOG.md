@@ -70,6 +70,18 @@
 | 2026-08-31 | `8695fa0ff6184117a737608f34157968` | 留一费导致少防御 | 21 | 8 | 8 | 13 | 0 | 否（追平） |
 | 2026-08-31 | `ee98a833f3194c3eb9649448a52f02e2` | 优化路线 | 27 | 17 | 17 | 10 | 0 | 否（追平） |
 
+## 2026-09-17 下午：位移诊断与估值通道实测（同日第二批）
+
+**T1 跨层诊断（双 trace，AEONGLASS 根）**：fix 变体（多卡选项键+leader优先配额）重建后双 trace 确认：签名线 step3 在 depth-3 剪枝存活并 Expanded，**step4 首次被生成**（打破昨夜「step4-6 从未生成」结论的前半部分）；但 step4 随后被**转置去重**吸收——(余像,步法+,准备+弃[尖啸,打击],步法+) 与 (步法,余像,准备+弃[尖啸,打击],步法+) 是同一 StateKey，兄弟变体存活，状态本身未丢失。AEONGLASS 63/64 退化源于 routing 重排本身的位移（哪些既有席位被挤掉未定位，需要 base/fix 深度池完整差分，观察缓冲 16384 事件上限会先溢出）。T1 修复维持撤回状态，跨层机制设计留下一工作块。
+
+**RadiancePower 估值修正（1b1a15a）**：专用 materiality 根（RadiantTincture×2 + RequireAtLeastOne 药水策略，单线程确定性）实测 9379f1e 原始估值（energy×turns 无缺口估计）**退化 7→16**；改为加入已验证的 RecurringEnergyGain 可消费缺口路径（CaptureEnergyRefundWindow 封顶、多实例共享 refundEnergyCapacity）后回归 7/7 一致。教训：持续返能类估值必须走缺口封顶，不能裸用「每回合 × 剩余回合」。
+
+**RitualPower 三角成长估值（已试并撤回）**：按 DemonForm 同构公式实现后，专用根（Mazaleth's Gift×2 + RequireAtLeastOne，单线程）实测 base=74/fix=79（+5 退化）。按「负结果不累积」纪律撤回。与 Radiance 裸估值同型问题：每回合成长收益假设未来攻击按剩余回合均摊兑现，未做兑现窗口约束；后续若重试需先设计兑现约束。
+
+**WraithForm 方向性修正（f55e9a8）**：幽影形态每回合 -敏此前落默认 Scaling 被当收益计，现计零（IntangiblePower 卡值另行处理）。配对回归零一致差异。
+
+**PhaseE 评估记录**：7 个全库无引用 Power（Coordinate/Fade/HammerTime/HardToKill/Leadership/OneForAll/Tank）与 CalcifyPower 镜像缺失属于「连模拟都没有」的语义层工作，规模需逐卡评估，不属估值批次。
+
 ## 2026-09-17：能力卡持续收益估值首批补值（RadiancePower/PlatingPower）
 
 两张持续收益能力走中间保路估值补值（`StrategicEffectVector` 保留通道，仿已验证的 OrbitPower/AutomationPower RecurringEnergyGain 同族机制，不进 Score/终局排序/状态键）：
