@@ -255,7 +255,7 @@ for ordered_metric in \
         'ordered-mutation acceptance metric is missing:'
 done
 opening_channel_line="$(rg --line-number --fixed-strings \
-    'List<List<SearchNode>> openingChannels = pool' \
+    'root.HasUnusedCardReplayAllocator' \
     "$search_root/CombatBeamSolver.Retention.cs" | head -n 1 | cut -d: -f1)"
 ordered_coordinator_line="$(rg --line-number --fixed-strings \
     'Retention.AddOrderedMutationPortfolio(pool, selected, selectedSet);' \
