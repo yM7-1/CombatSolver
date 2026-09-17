@@ -460,6 +460,8 @@ internal static class StrategicEffectModel
                 | StrategicEffectRequirements.AverageCardValue,
             OrbitPower or AutomationPower => StrategicEffectRequirements.RemainingTurns
                 | StrategicEffectRequirements.AverageCardValue,
+            RadiancePower => StrategicEffectRequirements.RemainingTurns
+                | StrategicEffectRequirements.AverageCardValue,
             CreativeAiPower => StrategicEffectRequirements.RemainingTurns
                 | StrategicEffectRequirements.AverageCardValue,
             IterationPower => StrategicEffectRequirements.StatusDrawTriggers
@@ -528,6 +530,9 @@ internal static class StrategicEffectModel
                 Math.Min(context.PowerEnergySpend, amount * context.PowerPlays) * energyUnit),
             CorruptionPower => Resource(context.SkillEnergySpend * energyUnit),
             OrbitPower or AutomationPower => Resource(context.RecurringEnergyGain * energyUnit),
+            RadiancePower => Resource(
+                power.DynamicVars.Energy.IntValue
+                * Math.Min(amount, context.RemainingTurns) * energyUnit),
             CreativeAiPower => CardAccess(
                 amount * context.RemainingTurns * cardAccessUnit),
             IterationPower => CardAccess(
