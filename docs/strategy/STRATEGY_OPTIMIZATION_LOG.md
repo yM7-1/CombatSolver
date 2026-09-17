@@ -81,6 +81,20 @@
 
 **PR 就绪结论**：我们的改动在上游 0.40.2 新基线上零退化成立，PR diff 回到净 22 提交（19 文件 +601/−36）。
 
+## 2026-09-18 凌晨：T1 跨 archetype 泛化验证（R1 · autopilot abba31386533）
+
+**方法**：三新包 0.40.2 实机报告（WF=瀑布巨兽·铁甲 / TS=试验体·铁甲 / QN=蜂后·机械师）逐包从包内 `recording/events.jsonl` 还原全程行动路线（含选牌与药水目标），转成 `KNOWN-CONFIG-ROUTE-TRACE-V0111` 已知路线配置，从开战根（无需原生事件回放，绕开 0.40.2 包 restore 兼容坑）以包原策略跑全新搜索并观察前缀的生成/展开/保留（beam 90/135/203/270 + Smart 用药梯度层）。
+
+**结果**：
+- **WF**（38 动作 / 8 回合 / 2 药）：记录线第 5–38 步在全部 beam 与用药梯度层（layer1/2 均实际运行）从未生成/展开，第 3–4 步仅宽 beam 存活。搜索自身 = `onlyDeathRoutes`、预计战损 48、必败；同构建完整模拟回放该记录线获胜（战损 22、敌方 0，RootUnchanged/LiveUnchanged 全过）。**win vs loss 级 materiality**。
+- **TS**（8 动作 / 1 回合 / 2 药）：记录线第 2–8 步从未生成；2 药梯度层 `route_missing=true`（连恰好 2 药的路线都搜不到）；记录线比搜索好 33→32（-1）。
+- **QN**（116 动作 / 20 回合 / 0 药）：重放在 T7 step42 遇同名牌副本解析歧义（`已不可出`），**不可评估**（若修复 occurrence 解析可复跑）。
+- **预注册裁决**：WF+TS = 2/3 包出现 T1 类深前缀截断 → **GO T1 跨层机制**（首选推荐线后验重排；备选深度席位租约）。QN 阻塞已记录。
+
+**证据与产物**（目录不提交）：`.local/checkpoint-batch/r1-trc-wf2` / `r1-trc-ts` / `r1-trc-qn2`；路线配置 `.local/regression/inputs/{wf,ts,qn}-recording.json`；诊断构建 `.local/regression/build-r1`；逐包提取脚本 `/tmp/opencode/r1/`（会话内）。
+
+**包侧兼容坑（记录，不计本项目缺陷）**：0.40.2 包的原生事件回放恢复在 WF（potion slot index 越界）与 TS（`net action type 11` 无映射）失败；`LoadRunSnapshotDirectly` 直恢复因地图控制状态被拒。
+
 ## 2026-09-17 晚：估值通道扩展第三批（Barricade/Regen，缺口封顶纪律落实）
 
 - **BarricadePower（b3b0fc5）**：壁垒「格挡不清空」按 `Prevention(当前格挡 × min(剩余回合, 8))` 线性折算（刻意不按复利），共享入伤上限兜底；StrategicEffectContext 新增 PlayerBlock init 字段（单点 Build 调用点填充，签名不变）。配对 broad-12 全部逐位一致；专用根（壁垒+格挡牌 vs Boss，单线程）49/49——lane 未达排序门槛，materiality 待块缺场景。
@@ -144,7 +158,7 @@ WraithFormPower 估值方向性错误：默认 Scaling(amount) 把每回合 -敏
 
 | 样例 | 当前证据 | 状态 |
 | --- | --- | --- |
-| Q1+Q2 / A1+A2 签名线（能力卡方向 T1 缺口） | KNOWN-CONFIG-ROUTE-TRACE 双战斗验证（QUEEN/AEONGLASS start 根，beam135/270/512 一致）：签名线 T1 前缀在 step3（准备+弃2）后被层间排名截断——RawRank 1652/2527、BeamRank −2,430,003 对切线 +283,997（差 ~270 万）；step4-6 状态从未生成；完整线终态 −4,600,006 优于当时保留末位 → 中途截断而非终局劣势。三个既有保护机制均不覆盖家族内深度前缀：谱系代表（家族内同排名）、opening_channels（投斧遗物门控 `HasUnusedCardReplayAllocator`，39b5e22）、cross-turn 隐形收益租约（仅回合末语义分歧，Terminal.cs） | 修复=家族内深度分层席位设计（结构级）；待与上游作者评审。诊断工具 `KNOWN-CONFIG-ROUTE-TRACE-V0111`（6815a84）与池观测（7257a96）已提交可复用 |
+| Q1+Q2 / A1+A2 签名线（能力卡方向 T1 缺口） | KNOWN-CONFIG-ROUTE-TRACE 双战斗验证（QUEEN/AEONGLASS start 根，beam135/270/512 一致）：签名线 T1 前缀在 step3（准备+弃2）后被层间排名截断——RawRank 1652/2527、BeamRank −2,430,003 对切线 +283,997（差 ~270 万）；step4-6 状态从未生成；完整线终态 −4,600,006 优于当时保留末位 → 中途截断而非终局劣势。三个既有保护机制均不覆盖家族内深度前缀：谱系代表（家族内同排名）、opening_channels（投斧遗物门控 `HasUnusedCardReplayAllocator`，39b5e22）、cross-turn 隐形收益租约（仅回合末语义分歧，Terminal.cs）。**2026-09-18 泛化验证：WF/TS 两新包已知路线全新搜索深前缀从未生成（WF 记录线可胜、搜索 onlyDeath；TS 少 1 HP），2/3 GO 跨层机制；QN 重放阻塞待评估** | 修复=跨层机制（推荐线后验重排优先 / 深度席位租约备选，结构级）；待与上游作者评审。诊断工具 `KNOWN-CONFIG-ROUTE-TRACE-V0111`（6815a84）与池观测（7257a96）已提交可复用 |
 | `48f87b132f1846df9630927b336a4afd` | 报告31→0，增加一瓶LUCKY_TONIC；比较根 :21 cursor0→:23 cursor7。前缀LETHALITY、SLEIGHT_OF_FLESH、WISH及第二张LETHALITY。Preflight通过；SearchOnly恢复失败，首差异Y记录0/0/0与当前0/0/0/0，尚未搜索 | 旧格式恢复待核对，不计质量；不能只改权重或把药水收益全部归为能力优化 |
 | `0530d7283df648828b4e27e47f9e75d9` 删除全局门槛后 | `act3-boss-global-unlimited-0530`：玩家15HP/敌235/0药/8000，未获胜 | 门槛不是唯一问题，未记改善 |
 | `f25c4872be5945269e8a6d38a9ab1286` 删除全局门槛后 | `act3-boss-global-unlimited-f25c`：同 :5 根，continuation/native-state通过，22战损/0药/T13/11750总展开（含原补充工作） | 未达到报告4战损；旧当前基线20/24各有记录，不能用报告51直接宣布本轮减损29 |
