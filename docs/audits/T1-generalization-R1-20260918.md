@@ -13,11 +13,13 @@
 
 ## 2. 结果
 
-| 包 | 遭遇 / 角色 | 路线 | 记录线成绩 | 全新搜索成绩 | 最深生成/展开步 | step3 外层保留池 |
-| --- | --- | --- | --- | --- | --- | --- |
-| WF `1a3f84ff` | WATERFALL_GIANT / 铁甲 | 38 动作 / 8 回合 / 2 药 | **获胜，战损 22**（完整模拟回放通过） | `onlyDeathRoutes=True`，预计战损 48，玩家 0 HP | step4 生成（宽 beam），step5+ 从未 | step3 进入 `TurnInput/PruneInput` 后未续 |
-| TS `840ca923` | TEST_SUBJECT / 铁甲 | 8 动作 / 1 回合 / 2 药 | 战损 32（-1） | 战损 33，T8 胜 | 仅 step1（第一瓶药）；step2+ 从未 | 2 药梯度层 `route_missing` |
-| QN `01f1707e` | QUEEN / 机械师 | 全长 116 动作（重放受阻）；前缀 42 动作 | 无 BetterWorldline 声明（SearchResultStale） | （前缀评估） | step4 生成（宽 beam），step5+ 从未 | **step3 进入 `RetentionPoolInput`+`GlobalRetention` 后未过剪枝**（三 beam 一致） |
+| 包 | 遭遇 / 角色 | 路线 | 记录线成绩 | 全新搜索成绩 | 最深生成 | 最深展开 | step3 保留池（真实排名） |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| WF `1a3f84ff` | WATERFALL_GIANT / 铁甲 | 38 动作 / 8 回合 / 2 药 | **获胜，战损 22**（完整模拟回放通过） | `onlyDeathRoutes=True`，预计战损 48，玩家 0 HP | step4（admitted 后未展开），step5+ 从未 | step3（宽 beam 到 step4） | 池 392，**RawRank 42，SelectedIndex 42（过 depth-3）** |
+| TS `840ca923` | TEST_SUBJECT / 铁甲 | 8 动作 / 1 回合 / 2 药 | 战损 32（-1） | 战损 33，T8 胜 | step2（第二瓶药，admitted 后未展开；同键兄弟 `rejected_dominated`），step3+ 从未 | step1 | 2 药梯度层 `route_missing` |
+| QN `01f1707e` | QUEEN / 机械师 | 全长 116 动作（重放受阻）；前缀 42 动作 | 无 BetterWorldline 声明（SearchResultStale） | （前缀评估） | step5（admitted 后未展开），step6+ 从未 | step4（宽 beam） | 池 249，**RawRank 52，SelectedIndex 52（过 depth-3）** |
+
+**停点定量结论**：三个包都不是「step3 被单层排名直接丢掉」——WF/QN 的 step3 实际通过 depth-3（RawRank 42/392、52/249 并被选中），真正的截断发生在**更深边界**：前缀状态 admitted 后拿不到展开（WF step4、TS step2、QN step4-5），更深的动作动作根本不生成。这与「前缀无法跨边界存续到兑现」一致，支持跨层机制（推荐线后验重排/深度租约），而不是在单层增加席位。
 
 - WF 是决定性的：同一构建里，记录的完整路线在严格模拟回放中获胜（敌方 0、玩家 26 HP、`RootUnchanged/LiveUnchanged` 全过），而全新搜索（约 12.7 万展开）只找到必败线。**搜索漏掉了一条可胜线。**
 - TS/QN 的 step3 及更深前缀在搜索中不存在；QN 的 step3 状态确实到达外层保留池但没被选中——与原始 T1 签名（step3 入池被层间排名截断）同型。
