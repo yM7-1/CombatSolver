@@ -81,6 +81,16 @@
 
 **PR 就绪结论**：我们的改动在上游 0.40.2 新基线上零退化成立，PR diff 回到净 22 提交（19 文件 +601/−36）。
 
+## 2026-09-18 上午：G2 第一步（剪枝丢弃见证捕获，仅诊断）
+
+- 新增 `SearchPathObservationStage.PruneDropped`：`Prune` 在应用全部保留通道与 incumbent 之后，把被丢弃的池成员中**与观看的已知路线状态匹配**的节点发出观测（`outer_prune_dropped`，含 PoolIndex/ParentRetentionRank）。仅在已知路线 trace 附加了 PathObserver 时生效：生产路径零开销、选择行为不变。
+- 三根验证（同 R1 路线配置，诊断构建 `.local/regression/build-r1`）：
+  - **WF**：记录线 step4（JUGGLING）以**完整动作标识**被 depth-4 前沿剪枝捕获（poolIndex 168，父 step3 rank 42/392）；step5 从未生成（无节点可捕）
+  - **QN**：step4/step5 完整标识捕获（poolIndex 278/25，父 rank 83/4）；step15/16 状态级等价命中
+  - **TS**：step4/step6 状态级等价命中（动作标识不同=经换序到达同一状态）；step2 在此前边界已被剪（早于前沿丢弃点）
+- **含义**：见证捕获点选对了——三个包记录线的深前缀都能在「被丢弃前」被稳定抓到；下一步接「有界见证 + 重放续搜 + 真实终局重排」（设计稿候选 A 余下部分）。
+- 门禁：`verify-refactor-boundaries.sh` OK（search_files=114）；构建 0 错误（2 既有 warning）。
+
 ## 2026-09-18 凌晨：T1 跨 archetype 泛化验证（R1 · autopilot abba31386533）
 
 **方法**：三新包 0.40.2 实机报告（WF=瀑布巨兽·铁甲 / TS=试验体·铁甲 / QN=蜂后·机械师）逐包从包内 `recording/events.jsonl` 还原全程行动路线（含选牌与药水目标），转成 `KNOWN-CONFIG-ROUTE-TRACE-V0111` 已知路线配置，从开战根（无需原生事件回放，绕开 0.40.2 包 restore 兼容坑）以包原策略跑全新搜索并观察前缀的生成/展开/保留（beam 90/135/203/270 + Smart 用药梯度层）。
