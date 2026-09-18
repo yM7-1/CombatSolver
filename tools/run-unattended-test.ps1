@@ -33,7 +33,7 @@ param(
     [string]$ShowcaseRoutePath = "",
     [string]$ShowcaseBundlePath = "",
     [string]$CheckpointArchivePath = "",
-    [string]$CheckpointSelector = "latest",
+    [string]$CheckpointSelector = "start",
     [ValidateSet("Preflight", "RestoreOnly", "ReplayRecorded", "SearchOnly", "DeploySolver")]
     [string]$ReplayMode = "RestoreOnly",
     [string]$ReplayPolicyOverridePath = "",
@@ -269,7 +269,8 @@ param(
     [int]$TimeoutSeconds = 120,
     [switch]$KeepGameOpen,
     [switch]$StopOwnedProcess,
-    [switch]$ExitOnComplete
+    [switch]$ExitOnComplete,
+    [switch]$CleanupInstanceOnExit
 )
 
 $ErrorActionPreference = "Stop"
@@ -404,8 +405,8 @@ if ([string]::Equals(
         [StringComparison]::OrdinalIgnoreCase)) {
     throw "Isolated and interactive data directories resolve to the same path: $dataDir"
 }
-if ($KeepGameOpen.IsPresent -and $ExitOnComplete.IsPresent) {
-    throw "KeepGameOpen and ExitOnComplete cannot be used together."
+if ($KeepGameOpen.IsPresent -and ($ExitOnComplete.IsPresent -or $CleanupInstanceOnExit.IsPresent)) {
+    throw "KeepGameOpen cannot be combined with ExitOnComplete or CleanupInstanceOnExit."
 }
 if ($HoldAfterInitialSearch.IsPresent -and -not $KeepGameOpen.IsPresent) {
     throw "HoldAfterInitialSearch requires KeepGameOpen so the profiler can attach to the held combat."
@@ -952,7 +953,7 @@ $request = [ordered]@{
     injectPlayerHpLossBeforeAutoSearchTurn = if ($InjectPlayerHpLossBeforeAutoSearchTurn -gt 0) { $InjectPlayerHpLossBeforeAutoSearchTurn } else { $null }
     injectPlayerHpLossAmount = $InjectPlayerHpLossAmount
     clearPlayerBlockBeforeEndTurnForTest = if ($ClearPlayerBlockBeforeEndTurnForTest -gt 0) { $ClearPlayerBlockBeforeEndTurnForTest } else { $null }
-    exitOnComplete = $ExitOnComplete.IsPresent
+    exitOnComplete = $ExitOnComplete.IsPresent -or $CleanupInstanceOnExit.IsPresent
 }
 if (-not [string]::IsNullOrWhiteSpace($InitialEnemyCurrentHpsJson)) {
     $request.initialEnemyCurrentHps = @($InitialEnemyCurrentHpsJson | ConvertFrom-Json)
@@ -1361,7 +1362,7 @@ while ((Get-Date) -lt $resultDeadline) {
                 $cleanupProcessOnExit = $false
                 exit 0
             }
-            if ($ExitOnComplete.IsPresent) {
+            if ($ExitOnComplete.IsPresent -or $CleanupInstanceOnExit.IsPresent) {
                 $exitDeadline = (Get-Date).AddSeconds(30)
                 while (-not $process.HasExited -and (Get-Date) -lt $exitDeadline) {
                     $process.WaitForExit(100) | Out-Null
@@ -1448,6 +1449,9 @@ throw [TimeoutException]::new("Unattended test exceeded the launcher timeout; it
                 }
             } finally {
                 $launcherLock.Dispose()
+                if ($CleanupInstanceOnExit.IsPresent) {
+                    Remove-HeadlessRuntimeInstance $runtimeContext
+                }
             }
         }
     }
