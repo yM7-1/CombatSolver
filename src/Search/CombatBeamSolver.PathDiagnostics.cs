@@ -133,7 +133,13 @@ internal sealed partial class CombatBeamSolver
             node.Snapshot.ShufflesCrossed,
             node.CumulativeEnemyHpLost,
             Array.AsReadOnly(actions),
-            CopyObservedChoices(rootChoices));
+            CopyObservedChoices(rootChoices))
+        {
+            LeaseId = node.PersistentProgressLease?.LeaseId,
+            LeaseRemaining = node.PersistentProgressLease?.Remaining,
+            ParentLeaseId = node.Parent?.PersistentProgressLease?.LeaseId,
+            ParentLeaseRemaining = node.Parent?.PersistentProgressLease?.Remaining,
+        };
     }
 
     private static SearchPathPolicyLabel ObservedPolicyLabel(SearchNode node) => new(
