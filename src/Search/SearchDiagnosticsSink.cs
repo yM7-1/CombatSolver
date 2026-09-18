@@ -125,7 +125,11 @@ internal sealed record SearchPathRetentionDetails(
     int? SelectedCount = null,
     SearchPathRoutingChoiceSignature? RoutingChoiceSignature = null,
     bool? IsRoutingOptionLeader = null,
-    SearchPathEvaluationValues? Evaluation = null);
+    SearchPathEvaluationValues? Evaluation = null,
+    int? WitnessRank = null,
+    int? WitnessCount = null,
+    int? WitnessDepthRank = null,
+    int? WitnessIncreaseCount = null);
 
 // Arrays/choices are detached value copies. This must not acquire a SearchNode, snapshot,
 // simulator, model, ledger, lazy enumerable, or callback that retains one of those objects.
