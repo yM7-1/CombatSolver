@@ -215,10 +215,9 @@ WraithFormPower 估值方向性错误：默认 Scaling(amount) 把每回合 -敏
 
 ## 2026-09-18 下午：社区群 37 包试点（0.41.0 合并后外部验证）
 
-- 数据来源：mod 交流群导出的 37 份社区问题包（mod 0.38.1，均为 `BetterWorldline` 人工优于旧求解器），本地目录 `.local/community-files/`。方法沿用 R1：从包内 `recording/events.jsonl` 还原已知路线为 `KnownRouteTraceConfig`，selector 取 `sessionId:0`（开战根，无需原生事件回放），在 0.41.0 合并版构建上跑 `KNOWN-CONFIG-ROUTE-TRACE-V0111`。
-- 新增本地工具（`.local/regression/`）：`tools/decode_replay_events.py`（按游戏 DLL 位级 `PacketWriter` 格式解码 `PlayerChoice`，CombatCard 选择=16 位 native id，全部 52 条与 `ChoiceContext.Options.NativeId` 对账通过）、`tools/events_to_route.py`（事件→路线配置，含选择挂接与目标/药水槽换算）、`run-community-trace.py`、`analyze-comm-trace.py`。
-- 可还原性：19 个首批尝试中 15 个完成路线回放与搜索追踪；阻塞类型 = 旧包原生恢复 NRE（`41d66f28`）、开战抽牌 RNG 不一致（`35a46c5b`、`6b21ada6` 第 8 步起）、BURST 双选牌无法用单 choice 表达（`be967852`）、药水/能力 Index 选择（`89e02332` 等）。
-- 0.41.0 基线结果（人工投影 = 报告内玩家实测；exact = 记录线在搜索中被完整生成并展开的最大步）：
+- 数据来源：mod 交流群导出的 37 份社区问题包（mod 0.38.1，均为 `BetterWorldline` 人工优于旧求解器），本地目录 `.local/community-files/`。方法沿用 R1：从包内 `recording/events.jsonl` 还原已知路线为 `KnownRouteTraceConfig`，selector 取 `sessionId:0`（开战根，无需原生事件回放），在 0.41.0 合并版构建上跑 `KNOWN-CONFIG-ROUTE-TRACE-V0111`；`exact` = 记录线在搜索中被完整生成并展开的最大步。
+- 新增本地工具（`.local/regression/`）：`tools/decode_replay_events.py`（按游戏 DLL 位级 `PacketWriter` 格式解码 `PlayerChoice`；CombatCard 选择=16 位 native id，52 条全部与 `ChoiceContext.Options.NativeId` 对账通过）、`tools/events_to_route.py`（事件→路线配置，含选择挂接与目标/药水槽换算）、`run-community-trace.py`、`analyze-comm-trace.py`。
+- 覆盖率：37 包中 25 个在 0.41.0 上完成追踪（含 3 个前缀截断）。阻塞类型：旧包原生恢复/事件回放异常（`41d66f28`、`5888467b`、`470b2f06` 药水政策）、开战抽牌 RNG 不一致（`35a46c5b`、`6b21ada6` 全 24 步、`21dee9b1`）、单 choice 表达不了 BURST 双选牌（`be967852`）、药水/能力 Index 选择（`89e02332` 等 6 个）、严格回放不一致（`9fd65807`）。
 
 | 样例 | 遭遇 | 人工 | 0.41.0 求解器 | exact/总步 | 判定 |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -227,18 +226,28 @@ WraithFormPower 估值方向性错误：默认 Scaling(amount) 把每回合 -敏
 | `81415185` | TERROR_EEL_ELITE | 6 | 9，T10 | 6/40 | 缺口 |
 | `59f11b22` | EXOSKELETONS_WEAK | 0 | 6，T4 | 5/15 | 缺口 |
 | `f2582928` | INFESTED_PRISMS_ELITE | 21 | 23，T5，1药 | 4/10 | 略差 |
-| `5465906e` | TERROR_EEL_ELITE | 9 | 9，T7，1药 | 9/15 | 追平 |
+| `bac28e34` | DECIMILLIPEDE_ELITE | 6 | 16，T8，1药 | 1/1 | 明显差 |
+| `a86fbffc` | THE_LOST_AND_FORGOTTEN | 2 | 7，T3 | 1/1 | 缺口 |
 | `30fac14c` | THE_KIN_BOSS | 19 | 21，T9 | 7/10 | 略差 |
+| `efed9228` | SNAPPING_JAXFRUIT | 7 | 7，T6 | 3/6 | 追平 |
+| `5465906e` | TERROR_EEL_ELITE | 9 | 9，T7，1药 | 9/15 | 追平 |
+| `6f23df31`（截 41 步） | QUEEN_BOSS | 0 | 0 | 5/41 | 追平 |
+| `c3ab14fb` | TERROR_EEL_ELITE | 3 | 3，T6，2药 | 1/1 | 追平（多2药） |
+| `6b21ada6`（截 7 步） | SPINY_TOAD_NORMAL | 1 | 3 | 7/7 | 接近 |
+| `f1bf7c4b` | KNIGHTS_ELITE | 2 | 2，T3 | 2/12 | 追平 |
 | `b44a6f28` | QUEEN_BOSS | 35 | 27，T14，1药 | 4/16 | 更优 |
 | `7b7caa9e` | QUEEN_BOSS | 31 | 26，T12 | 5/15 | 更优 |
+| `a824f1e0` | QUEEN_BOSS | 30 | 19，T9 | 4/12 | 更优 |
 | `ce563f11` | SOUL_FYSH_BOSS | 20 | 16，T17 | 16/57 | 更优 |
 | `f5e8db3a` | WATERFALL_GIANT_BOSS | 30 | 19，T20 | 22/42 | 更优 |
 | `a917c8a5` | SOUL_NEXUS_ELITE | 3 | 1，T8 | 13/28 | 更优 |
 | `16c074fa` | TUNNELER_WEAK | 9 | 7，T6 | 8/8 | 更优 |
-| `6f23df31`（截 41 步） | QUEEN_BOSS | 0 | 0，T? | 5/41 | 追平 |
-| `6b21ada6`（截 7 步） | SPINY_TOAD_NORMAL | 1 | 3 | 7/7 | 接近 |
+| `cb32ae91` | KAISER_CRAB_BOSS | 20 | 19，T5 | 4/4 | 更优 |
+| `e98a44a5` | SOUL_FYSH_BOSS | 7 | 8，T12 | 8/8 | 接近 |
+| `3c1b5bba`（截 33 步） | WATERFALL_GIANT_BOSS | 0 | 1，T11，1药 | 12/33 | 接近 |
+| `900ff293` | ENTOMANCER_ELITE | 77 | 72，T10 | 6/6 | 更优 |
 
-- 结论：① 0.41.0 在多数社区根上已追平/反超人工，但 `ecaf220d`（永世沙漏）、`9434499f`（感染棱柱）等仍是明确缺口；② T1 签名（记录线在搜索中被中途剪掉）在 13/15 个根上仍存在，但只有求解器结果劣于人工时才有害；③ **lease16 在合并版上只对 WF 类深线有效**（0.40.2 WF 对照：基线 48 死亡 → lease16 45 胜利；4 个社区缺口根上无改善，`81415185` 9→8），支持「保持实验通道/只扩 WF 类证据」，不支持直接产品化；④ 旧包（0.38.1）路线还原在约 80% 样本上可行，RNG/原生恢复类阻塞已记录。
+- 结论：① 0.41.0 在多数社区根上已追平/反超人工（25 个中 21 个 ≤ 人工+2 或更优），明确缺口收缩为 `ecaf220d`（永世沙漏）、`9434499f`（感染棱柱）、`81415185`、`59f11b22`、`f2582928`、`bac28e34`、`a86fbffc`；② T1 签名（记录线在搜索中被中途剪掉）仍普遍存在（25 个中 19 个 exact < 总步），但只有求解器结果劣于人工时才有害；③ **lease16 在合并版上只对 WF 类深线有效**（0.40.2 WF 对照：基线 48 死亡 → lease16 45 胜利；4 个社区缺口根上无改善，`81415185` 9→8），支持「保持实验通道/只扩 WF 类证据」，不支持直接产品化；④ 0.38.1 旧包路线还原可行率约 2/3，RNG/原生恢复类阻塞已分类记录；⑤ 社区包可用于持续回归：修复或调参后可用同一批根复跑对照。
 
 ## 待处理
 
