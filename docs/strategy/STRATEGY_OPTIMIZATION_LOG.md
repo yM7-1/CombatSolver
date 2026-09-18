@@ -81,6 +81,25 @@
 
 **PR 就绪结论**：我们的改动在上游 0.40.2 新基线上零退化成立，PR diff 回到净 22 提交（19 文件 +601/−36）。
 
+## 2026-09-18 中午：跨层租约原型（G2 候选 B · 默认关闭实验）
+
+**机制**：`SearchNode.PersistentProgressLease`（3 步可继承租约）；某步相对父节点出现 `PersistentBuffValue` 或 `RetentionValue` 增量时铸租约，剪枝时按池序至多 `leaseSeats` 席保入（子节点继承 `Remaining-1`）。`SolverSearchProfile.PersistentProgressLeaseSeats` 默认 0；本轮仅 trace 配置 `leaseSeats` 与实验构建（VeryHigh=16/32）启用。
+
+**固定根（同根同策略 paired）**：
+
+| 根 | 基线 | lease32 | lease16 |
+| --- | --- | --- | --- |
+| WF 瀑布巨兽 | onlyDeath(48)/必败 | **胜利 38** | **胜利 45** |
+| QN 蜂后前缀 | 53 | 50 | **41** |
+| TS 试验体 | 33 | 31 | 33 |
+| AEONGLASS（位移敏感历史根） | 37 | — | 37（持平） |
+
+**broad-12 配对检查（两轮基线自噪声 ±15，单例小差异不可归因）**：
+- lease32：7/10 相同，001/007/008/010 轻微变差（+3~+10，在噪声带内但方向一致）；007 两轮 72/72 vs 基线 52-67、010 29/37 vs 27/27。
+- lease16：001=89（基线 83-98）、003=**24**（基线 29-33，更好）、007=67、008=68、010=27（与基线一致）——无可归因退化。
+
+**结论**：机制成立且参数敏感（32 有过收/位移迹象，16 在已有配对中更干净）；记录线所在 beam 的 step4 由 `PruneDropped` 变 `PruneFinal`，胜出路线与记录线同族。**默认保持关闭**；待更多配对复跑 + 4pack（A1/Q1/A2）后再评估是否产品化（届时需设置面与 broad-12 全量门）。
+
 ## 2026-09-18 上午：G2 第一步（剪枝丢弃见证捕获，仅诊断）
 
 - 新增 `SearchPathObservationStage.PruneDropped`：`Prune` 在应用全部保留通道与 incumbent 之后，把被丢弃的池成员中**与观看的已知路线状态匹配**的节点发出观测（`outer_prune_dropped`，含 PoolIndex/ParentRetentionRank）。仅在已知路线 trace 附加了 PathObserver 时生效：生产路径零开销、选择行为不变。

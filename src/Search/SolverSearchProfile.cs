@@ -22,6 +22,13 @@ internal sealed record SolverSearchProfile(
     /// </summary>
     public bool BaseScoreOnly { get; init; }
 
+    /// <summary>
+    /// Experimental cross-boundary lease budget: up to this many extra seats per prune are given
+    /// to lineages that increased persistent/setup value, for a few further boundaries.
+    /// Zero by default, so ordinary retention is unchanged unless a test profile enables it.
+    /// </summary>
+    public int PersistentProgressLeaseSeats { get; init; }
+
     public static SolverSearchProfile Default { get; } = new(
         BeamWidth: 60,
         MaxExpandedNodes: 120_000,
